@@ -8,6 +8,10 @@ import {
 } from './rooms.js'
 import { initGameState, startTurn, projectState } from './game/gameState.js'
 import { drawCard } from './game/deck.js'
+import {
+  applyPlace, applyDirectMove, applyDirectAttack, applyDirectSacrifice,
+  applyCycle, applyCommand, applyDisrupt, applyEndTurn
+} from './game/actions.js'
 
 const app = express()
 app.use(cors())
@@ -21,6 +25,8 @@ const io = new Server(httpServer, {
 const PORT = process.env.PORT || 3001
 
 const disconnectTimers = new Map()
+const autoEndTimers   = new Map()
+const AUTO_END_MS     = 5000
 
 // Cleanly remove a socket from whatever room it's currently in.
 // Used before create/join to prevent ghost slots when navigating between rooms.
@@ -38,6 +44,29 @@ function leaveCurrentRoom(socket) {
     if (host) io.to(host.socketId).emit('opponent_disconnected')
   }
   socket.leave(room.code)
+}
+
+function clearAutoEndTurn(code) {
+  if (autoEndTimers.has(code)) {
+    clearTimeout(autoEndTimers.get(code))
+    autoEndTimers.delete(code)
+  }
+}
+
+function scheduleAutoEndTurn(room) {
+  const { code } = room
+  clearAutoEndTurn(code)
+  io.to(code).emit('auto_end_turn_pending', { ms: AUTO_END_MS })
+  const timer = setTimeout(() => {
+    autoEndTimers.delete(code)
+    const currentRoom = getRoom(code)
+    if (!currentRoom || currentRoom.phase !== 'playing') return
+    if (currentRoom.turnPhase !== 'actions' || currentRoom.actionsRemaining > 0) return
+    const player = currentRoom.players[currentRoom.currentTurn]
+    const result = applyEndTurn(currentRoom, player, { discardIndices: [] })
+    if (!result.error) emitStateUpdate(currentRoom, result.lastAction)
+  }, AUTO_END_MS)
+  autoEndTimers.set(code, timer)
 }
 
 // Emit the current projected state to both players in a room.
@@ -242,6 +271,56 @@ io.on('connection', socket => {
     const { room, player } = result
     const opponent = room.players.find(p => p.side !== player.side)
     if (opponent) io.to(opponent.socketId).emit('opponent_select_piece', payload)
+  })
+
+  // ── Game action ────────────────────────────────────────────────────
+  socket.on('game_action', payload => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return socket.emit('error', { message: 'Not in a room.' })
+    const { room, player } = result
+
+    if (room.phase !== 'playing') return socket.emit('error', { message: 'Game not in progress.' })
+    if (player.side !== room.currentTurn) return socket.emit('error', { message: 'Not your turn.' })
+
+    // Prompt gates (Phase 5)
+    if (room.reactionWindowOpen || room.bodyguardPromptOpen || room.enslavePromptOpen)
+      return socket.emit('error', { message: 'Waiting for a response.' })
+
+    // During discard phase only end_turn is valid
+    if (room.turnPhase === 'discard' && payload.type !== 'end_turn')
+      return socket.emit('error', { message: 'Discard down to 5 cards first.' })
+
+    // Any incoming action cancels the auto-end countdown
+    clearAutoEndTurn(room.code)
+
+    // Command / Disrupt require actions > 0 to play
+    if ((payload.type === 'play_command' || payload.type === 'play_disrupt') && room.actionsRemaining === 0)
+      return socket.emit('error', { message: 'No actions remaining.' })
+
+    // Non-end_turn actions are blocked once actions are exhausted
+    if (payload.type !== 'end_turn' && room.actionsRemaining <= 0)
+      return socket.emit('error', { message: 'No actions remaining.' })
+
+    let actionResult
+    switch (payload.type) {
+      case 'place':            actionResult = applyPlace(room, player, payload);           break
+      case 'direct_move':      actionResult = applyDirectMove(room, player, payload);      break
+      case 'direct_attack':    actionResult = applyDirectAttack(room, player, payload);    break
+      case 'direct_sacrifice': actionResult = applyDirectSacrifice(room, player, payload); break
+      case 'cycle':            actionResult = applyCycle(room, player, payload);           break
+      case 'play_command':     actionResult = applyCommand(room, player, payload);         break
+      case 'play_disrupt':     actionResult = applyDisrupt(room, player, payload);         break
+      case 'end_turn':         actionResult = applyEndTurn(room, player, payload);         break
+      default: return socket.emit('error', { message: 'Unknown action.' })
+    }
+
+    if (actionResult.error) return socket.emit('error', { message: actionResult.error })
+    emitStateUpdate(room, actionResult.lastAction)
+
+    // When actions hit 0 and hand is fine, start the auto-end countdown
+    if (room.actionsRemaining === 0 && room.turnPhase === 'actions') {
+      scheduleAutoEndTurn(room)
+    }
   })
 
   // ── Play Again ─────────────────────────────────────────────────────

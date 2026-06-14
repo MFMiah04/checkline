@@ -219,8 +219,8 @@ button:disabled {
 }
 
 .board-space {
-  width: 110px;
-  height: 82px;
+  width: 95px;
+  height: 95px;
   background: #16213e;
   border: 1px solid #1e3060;
   border-radius: 5px;
@@ -241,6 +241,43 @@ button:disabled {
 
 .board-space.clickable:hover {
   border-color: #7c83fd;
+}
+
+.board-space.selected-piece {
+  border-color: #7c83fd;
+  background: #1e2a54;
+  box-shadow: inset 0 0 0 1px #7c83fd;
+}
+
+.board-space.place-target:hover {
+  border-color: #81c784;
+  background: #1a3020;
+}
+
+.board-space.valid-move {
+  border-color: rgba(79, 195, 247, 0.7);
+  background-color: rgba(79, 195, 247, 0.1);
+}
+
+.board-space.valid-move:hover {
+  background-color: rgba(79, 195, 247, 0.25);
+}
+
+.board-space.valid-attack {
+  border-color: rgba(239, 83, 80, 0.7);
+  background-color: rgba(239, 83, 80, 0.1);
+}
+
+.board-space.valid-attack:hover {
+  background-color: rgba(239, 83, 80, 0.25);
+}
+
+.board-space.attack-range {
+  background-color: rgba(239, 83, 80, 0.05);
+}
+
+.board-space.attack-range:hover {
+  background-color: rgba(239, 83, 80, 0.12);
 }
 
 /* ── Pieces ──────────────────────────────────────────────────────── */
@@ -272,6 +309,10 @@ button:disabled {
   display: flex;
   gap: 2px;
   font-size: 0.65rem;
+}
+
+.piece.cant-act {
+  opacity: 0.4;
 }
 
 .piece-buff {
@@ -355,6 +396,121 @@ button:disabled {
   opacity: 0.5;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* ── Game interaction ────────────────────────────────────────────── */
+
+.my-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.opponent-area {
+  width: 100%;
+}
+
+.player-label {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 0.25rem;
+}
+
+.game-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 2.5rem;
+}
+
+.btn-secondary {
+  background: #2a3a6a;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #3a4a8a;
+}
+
+.btn-active {
+  background: #3a4a8a !important;
+  outline: 2px solid #7c83fd;
+  outline-offset: 2px;
+}
+
+.waiting-turn {
+  color: #666;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.error-msg {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  width: 100%;
+  text-align: center;
+}
+
+/* ── Discard overlay ─────────────────────────────────────────────── */
+
+.discard-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+  width: 100%;
+}
+
+.discard-overlay h2 {
+  font-size: 1.4rem;
+}
+
+.discard-controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* ── Auto-end turn countdown ─────────────────────────────────────── */
+
+@keyframes drain {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+.auto-end-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.auto-end-label {
+  font-size: 0.8rem;
+  color: #888;
+  font-style: italic;
+}
+
+.auto-end-track {
+  width: 100%;
+  height: 4px;
+  background: #1e2a54;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.auto-end-bar {
+  height: 100%;
+  background: #7c83fd;
+  border-radius: 2px;
+  animation: drain linear forwards;
 }
 
 /* Category colour on the top border */
