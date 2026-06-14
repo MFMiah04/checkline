@@ -111,3 +111,255 @@ button:disabled {
   color: #888;
   font-style: italic;
 }
+
+/* ── Game layout ─────────────────────────────────────────────────── */
+
+.game-loading,
+.game-over {
+  text-align: center;
+  padding: 2rem;
+}
+
+.game-over h1 {
+  margin-bottom: 0.5rem;
+}
+
+.game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  width: 100%;
+  max-width: 680px;
+}
+
+.opponent-label {
+  font-size: 0.85rem;
+  color: #888;
+  align-self: flex-start;
+}
+
+/* ── Mulligan ────────────────────────────────────────────────────── */
+
+.mulligan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  max-width: 680px;
+  text-align: center;
+}
+
+.mulligan h2 {
+  font-size: 1.4rem;
+  letter-spacing: 0.05em;
+}
+
+.mulligan-hint {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.mulligan-waiting {
+  color: #888;
+  font-style: italic;
+  font-size: 1.1rem;
+}
+
+.mulligan-confirm {
+  margin-top: 0.5rem;
+}
+
+/* ── Game info panel ─────────────────────────────────────────────── */
+
+.game-info {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  background: #16213e;
+  border: 1px solid #2a3a5c;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+}
+
+.turn-indicator {
+  flex: 1;
+}
+
+.actions-remaining {
+  color: #7c83fd;
+}
+
+.deck-discard {
+  display: flex;
+  gap: 1rem;
+  color: #888;
+  font-size: 0.85rem;
+}
+
+/* ── Board ───────────────────────────────────────────────────────── */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #0d1526;
+  border: 1px solid #2a3a5c;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.board-row {
+  display: flex;
+  gap: 4px;
+}
+
+.board-space {
+  width: 110px;
+  height: 82px;
+  background: #16213e;
+  border: 1px solid #1e3060;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.1s;
+}
+
+.board-space.own-side {
+  background: #18264a;
+  border-color: #2a3a6a;
+}
+
+.board-space.clickable {
+  cursor: pointer;
+}
+
+.board-space.clickable:hover {
+  border-color: #7c83fd;
+}
+
+/* ── Pieces ──────────────────────────────────────────────────────── */
+
+.piece {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  color: #c8d8ff;
+}
+
+.piece.enemy {
+  color: #ff9090;
+}
+
+.piece-symbol {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.piece-label {
+  font-size: 0.6rem;
+  opacity: 0.7;
+  letter-spacing: 0.04em;
+}
+
+.piece-tokens {
+  display: flex;
+  gap: 2px;
+  font-size: 0.65rem;
+}
+
+.piece-buff {
+  color: #81c784;
+  font-weight: bold;
+}
+
+.piece-debuff {
+  color: #e57373;
+  font-weight: bold;
+}
+
+/* ── Hand ────────────────────────────────────────────────────────── */
+
+.hand {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-height: 104px;
+  align-items: flex-start;
+  padding: 4px 0;
+}
+
+.opponent-hand {
+  opacity: 0.6;
+}
+
+.hand-empty {
+  color: #555;
+  font-size: 0.85rem;
+  align-self: center;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────── */
+
+.card {
+  width: 68px;
+  height: 96px;
+  background: #16213e;
+  border: 1px solid #2a3a5c;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  text-align: center;
+  transition: border-color 0.1s, transform 0.1s;
+  border-top-width: 3px;
+}
+
+.card.clickable {
+  cursor: pointer;
+}
+
+.card.clickable:hover {
+  transform: translateY(-4px);
+}
+
+.card.selected {
+  border-color: #7c83fd;
+  background: #1e2a54;
+  transform: translateY(-6px);
+}
+
+.card.face-down {
+  background: #0e1930;
+  border-color: #1a2a45;
+}
+
+.card-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.card-category {
+  font-size: 0.6rem;
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Category colour on the top border */
+.card.piece    { border-top-color: #aaaaaa; }
+.card.control  { border-top-color: #4fc3f7; }
+.card.buff     { border-top-color: #81c784; }
+.card.debuff   { border-top-color: #e57373; }
+.card.reaction { border-top-color: #ffd54f; }

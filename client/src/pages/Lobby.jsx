@@ -25,10 +25,12 @@ export default function Lobby() {
   useSocket({
     room_created({ code: roomCode }) {
       setIsHost(true)
+      localStorage.setItem('checkline_side', '0')
       setPlayers([{ name: localStorage.getItem('checkline_name') || 'Host', side: 0 }])
     },
     room_joined({ code: roomCode, hostName }) {
       setIsHost(false)
+      localStorage.setItem('checkline_side', '1')
       setPlayers([
         { name: hostName, side: 0 },
         { name: localStorage.getItem('checkline_name') || 'Guest', side: 1 }

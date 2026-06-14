@@ -6,6 +6,8 @@ import {
   createRoom, joinRoom, getRoom, getRoomByToken,
   getRoomBySocket, removeRoom, updateSocketId
 } from './rooms.js'
+import { initGameState, startTurn, projectState } from './game/gameState.js'
+import { drawCard } from './game/deck.js'
 
 const app = express()
 app.use(cors())
@@ -38,6 +40,13 @@ function leaveCurrentRoom(socket) {
   socket.leave(room.code)
 }
 
+// Emit the current projected state to both players in a room.
+function emitStateUpdate(room, lastAction = null) {
+  room.players.forEach((p, i) => {
+    io.to(p.socketId).emit('state_update', { state: projectState(room, i), lastAction })
+  })
+}
+
 io.on('connection', socket => {
   // ── Session token ──────────────────────────────────────────────────
   const token = crypto.randomUUID()
@@ -60,7 +69,6 @@ io.on('connection', socket => {
     leaveCurrentRoom(socket)
 
     // If target room has a disconnected ghost in slot 1, cancel their grace period
-    // so joinRoom can evict them cleanly
     const targetRoom = getRoom(code.trim().toUpperCase())
     if (targetRoom?.players[1] && !targetRoom.players[1].connected) {
       const ghostToken = targetRoom.players[1].sessionToken
@@ -83,36 +91,34 @@ io.on('connection', socket => {
 
   // ── Reconnect ──────────────────────────────────────────────────────
   socket.on('reconnect', ({ token: clientToken, code }) => {
-    // Cancel any pending disconnect timer for this session
     if (disconnectTimers.has(clientToken)) {
       clearTimeout(disconnectTimers.get(clientToken))
       disconnectTimers.delete(clientToken)
     }
 
-    const result = updateSocketId(clientToken, socket.id)  // also sets connected = true
+    const result = updateSocketId(clientToken, socket.id)
     if (!result) return socket.emit('error', { message: 'Session expired. Please return to the home screen.' })
 
     const { room, player } = result
     socket.join(room.code)
 
-    // Re-emit lobby state for lobby reconnects
     if (room.phase === 'lobby') {
       if (player.side === 0) {
         socket.emit('room_created', { code: room.code, token: clientToken })
-        // Only show opponent if they're actually connected (not in grace period)
         if (room.players.length > 1 && room.players[1].connected) {
           socket.emit('opponent_joined', { name: room.players[1].name })
         }
       } else {
         socket.emit('room_joined', { code: room.code, hostName: room.players[0].name, token: clientToken })
-        // Notify host that their opponent is back
         const host = room.players[0]
         if (host?.connected) {
           io.to(host.socketId).emit('opponent_joined', { name: player.name })
         }
       }
+    } else {
+      // Mulligan, playing, or ended — send current game state
+      socket.emit('state_update', { state: projectState(room, player.side), lastAction: null })
     }
-    // Game reconnect handled in Phase 6
   })
 
   // ── Start game ─────────────────────────────────────────────────────
@@ -127,8 +133,45 @@ io.on('connection', socket => {
     if (room.phase !== 'lobby') return socket.emit('error', { message: 'Game already started.' })
 
     room.phase = 'mulligan'
-    io.to(room.code).emit('game_starting')
-    // Full game state init in Phase 2
+    initGameState(room)
+
+    room.players.forEach((p, i) => {
+      io.to(p.socketId).emit('game_starting', { state: projectState(room, i) })
+    })
+  })
+
+  // ── Mulligan done ──────────────────────────────────────────────────
+  socket.on('mulligan_done', ({ discardIndices }) => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+
+    if (room.phase !== 'mulligan') return
+    if (player.mulliganDone) return
+
+    // Validate and deduplicate indices
+    const indices = [...new Set(
+      (discardIndices || []).filter(i => Number.isInteger(i) && i >= 0 && i < player.hand.length)
+    )].sort((a, b) => b - a)  // descending so splices don't shift later indices
+
+    // Remove selected cards → discard pile
+    const removed = indices.map(i => player.hand.splice(i, 1)[0])
+    room.discardPile.push(...removed)
+
+    // Draw replacements
+    for (let i = 0; i < removed.length; i++) {
+      const card = drawCard(room.deck, room.discardPile)
+      if (card) player.hand.push(card)
+    }
+
+    player.mulliganDone = true
+    emitStateUpdate(room)
+
+    // Start game when both players have finished mulligan
+    if (room.players.every(p => p.mulliganDone)) {
+      startTurn(room)
+      emitStateUpdate(room)
+    }
   })
 
   // ── Disconnect ─────────────────────────────────────────────────────
@@ -137,11 +180,10 @@ io.on('connection', socket => {
     if (!result) return
     const { room, player } = result
 
-    player.connected = false  // mark as disconnected before starting grace period
+    player.connected = false
 
     if (room.phase === 'lobby') {
       if (player.side === 0) {
-        // Host left — 15s grace period for refresh/reconnect
         const playerToken = player.sessionToken
         const timer = setTimeout(() => {
           disconnectTimers.delete(playerToken)
@@ -155,7 +197,6 @@ io.on('connection', socket => {
         }, 15000)
         disconnectTimers.set(playerToken, timer)
       } else {
-        // Guest left — 15s grace period; notify host immediately
         const playerToken = player.sessionToken
         const host = room.players[0]
         if (host?.connected) io.to(host.socketId).emit('opponent_disconnected')
@@ -216,9 +257,12 @@ io.on('connection', socket => {
     const result = getRoomBySocket(socket.id)
     if (!result) return
     const { room } = result
-    // Full reset in Phase 6 — placeholder
+    // Full reset in Phase 6
     room.phase = 'mulligan'
-    io.to(room.code).emit('game_starting')
+    initGameState(room)
+    room.players.forEach((p, i) => {
+      io.to(p.socketId).emit('game_starting', { state: projectState(room, i) })
+    })
   })
 })
 

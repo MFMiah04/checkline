@@ -18,7 +18,6 @@ export function createRoom(hostSocket, hostName, hostToken) {
     players: [
       { socketId: hostSocket.id, sessionToken: hostToken, name: hostName, side: 0, hand: [], mulliganDone: false, connected: true }
     ],
-    gameState: null
   }
   rooms.set(code, room)
   return room
