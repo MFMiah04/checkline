@@ -27,7 +27,7 @@ Draw 1 card. If the deck is empty, shuffle the discard pile into a new draw pile
 Take **2 actions**. Each action is one of:
 - **Place** a piece onto any empty space on your side.
 - **Play** a Control, Buff, or Debuff card.
-- **Cycle:** discard 1 card from your hand and draw 1 card.
+- **Cycle:** discard 1 card from your hand and draw 1 card. *(Cycle cannot be reacted to.)*
 - **Direct** a placed piece to move, attack, or use its Sacrifice ability.
 
 Each piece may be directed **once per turn**, not on the turn it was placed or enslaved.
@@ -56,7 +56,7 @@ Your King is in Check when an opponent's piece can attack it. To remove Check:
 - Move the King to a safe space
 - Place or move a piece to block the line of attack
 - Destroy or Fatigue the attacking piece
-- Trigger Bodyguard on a piece adjacent to the King
+- Have a Bodyguard-buffed piece orthogonally adjacent to the King *(the Bodyguard provides a defensive buffer; the King cannot be directly attacked)*
 
 Reactions cannot be used to prevent an action or card that removes the King from Check.
 
