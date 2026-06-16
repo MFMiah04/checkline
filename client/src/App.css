@@ -226,12 +226,61 @@ button:disabled {
   color: #7c83fd;
 }
 
-.deck-discard {
+/* ── Board area (discard | board | deck) ─────────────────────────── */
+
+.board-area {
   display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: 1rem;
-  color: #888;
-  font-size: 0.85rem;
 }
+
+/* ── Deck / Discard piles ────────────────────────────────────────── */
+
+.pile-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 76px;
+  flex-shrink: 0;
+}
+
+.pile-label {
+  font-size: 0.7rem;
+  color: #6677aa;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pile-stack {
+  position: relative;
+  width: 68px;
+  height: 96px;
+}
+
+.pile-empty {
+  width: 68px;
+  height: 96px;
+  border: 1px dashed #2a3a5c;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  color: #3a4a6a;
+}
+
+.pile-card {
+  position: absolute;
+  width: 68px;
+  height: 96px;
+  pointer-events: none;
+}
+
+.pile-card-3 { top: -4px; left: -3px; }
+.pile-card-2 { top: -2px; left: -1.5px; }
+.pile-card-1 { top: 0;    left: 0; }
 
 /* ── Board ───────────────────────────────────────────────────────── */
 
@@ -328,6 +377,16 @@ button:disabled {
   50%       { background-color: rgba(239, 83, 80, 0.35); }
 }
 
+.board-space.last-action-flash {
+  animation: flash-action 1.5s ease-out forwards;
+}
+
+@keyframes flash-action {
+  0%   { background-color: rgba(124, 131, 253, 0.4); border-color: rgba(124, 131, 253, 0.8); }
+  60%  { background-color: rgba(124, 131, 253, 0.15); border-color: rgba(124, 131, 253, 0.4); }
+  100% { background-color: transparent; border-color: inherit; }
+}
+
 .board-space.valid-attack:hover {
   background-color: rgba(239, 83, 80, 0.25);
 }
@@ -390,16 +449,18 @@ button:disabled {
 
 .hand {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 10px;
   justify-content: center;
-  min-height: 104px;
-  align-items: flex-start;
-  padding: 4px 0;
+  align-items: flex-end;
+  min-height: 110px;
+  padding: 8px 12px 0;
+  overflow: visible;
 }
 
 .opponent-hand {
-  opacity: 0.6;
+  gap: 3px;
+  min-height: 86px;
+  padding-top: 4px;
 }
 
 .hand-empty {
@@ -446,6 +507,17 @@ button:disabled {
   border-color: #1a2a45;
 }
 
+.card.reaction-available {
+  border-color: rgba(255, 213, 79, 0.8);
+  box-shadow: 0 0 10px rgba(255, 213, 79, 0.35);
+  animation: pulse-reaction 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-reaction {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 213, 79, 0.3); }
+  50%       { box-shadow: 0 0 16px rgba(255, 213, 79, 0.6); }
+}
+
 .card.intercepted {
   opacity: 0.45;
   filter: grayscale(0.6);
@@ -475,6 +547,31 @@ button:disabled {
   letter-spacing: 0.05em;
 }
 
+.card-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0e1930;
+  border: 1px solid #2a3a5c;
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.7rem;
+  color: #c8d8ff;
+  line-height: 1.4;
+  width: 160px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 100;
+  white-space: normal;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+.card:hover .card-tooltip {
+  display: block;
+}
+
 /* ── Game interaction ────────────────────────────────────────────── */
 
 .my-area {
@@ -482,7 +579,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 1.2rem;
 }
 
 .opponent-area {
@@ -500,6 +597,8 @@ button:disabled {
   gap: 0.75rem;
   align-items: center;
   min-height: 2.5rem;
+  position: relative;
+  z-index: 10;
 }
 
 .btn-secondary {
@@ -736,4 +835,54 @@ button:disabled {
 .auto-pass-toggle.btn-warning {
   border-color: rgba(255, 213, 79, 0.8);
   color: #ffd54f;
+}
+
+/* ── Discard pile hover float ────────────────────────────────────────── */
+
+.pile-card-1 {
+  transition: transform 0.2s ease;
+}
+
+.pile-area:hover .pile-card-1 {
+  transform: translateY(-14px);
+}
+
+/* ── Discard pile cycle target ───────────────────────────────────────── */
+
+.pile-area.can-cycle {
+  cursor: pointer;
+}
+
+.pile-area.can-cycle:hover .pile-stack {
+  filter: drop-shadow(0 0 8px rgba(79, 195, 247, 0.5));
+}
+
+.pile-cycle-hint {
+  font-size: 0.62rem;
+  color: #4fc3f7;
+  text-align: center;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+/* ── Discard pile browse index + scroll hint ─────────────────────────── */
+
+.pile-browse-idx {
+  font-size: 0.55rem;
+  opacity: 0.5;
+  margin-top: 2px;
+}
+
+.pile-scroll-hint {
+  font-size: 0.58rem;
+  color: #3a4a6a;
+  text-align: center;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+/* ── Opponent browsing indicator ─────────────────────────────────────── */
+
+.pile-area.opponent-browsing .pile-label {
+  color: #7c83fd;
 }

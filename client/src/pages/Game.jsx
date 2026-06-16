@@ -4,6 +4,8 @@ import { getSocket, useSocket } from '../hooks/useSocket'
 import Board from '../components/Board'
 import Hand from '../components/Hand'
 import GameInfo from '../components/GameInfo'
+import DeckPile from '../components/DeckPile'
+import DiscardPile from '../components/DiscardPile'
 import { isValidMove, isValidAttack, getAttackRange, isPinned, isFatigued } from '../utils/clientRules'
 
 const PLACEABLE   = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
@@ -22,8 +24,11 @@ export default function Game() {
   const [state, setState]             = useState(null)
   const [selectedCardIdx, setCard]    = useState(null)
   const [selectedPiece, setPiece]     = useState(null)
-  const [cycleMode, setCycleMode]     = useState(false)
   const [discardMode, setDiscardMode] = useState(false)
+  const [localHandOrder, setLocalHandOrder] = useState(null)
+  const [oppHandIds, setOppHandIds]   = useState(null)
+  const [discardViewIndex, setDiscardViewIndex] = useState(0)
+  const [discardBrowserId, setDiscardBrowserId] = useState(null)
   const [errorMsg, setErrorMsg]       = useState('')
   const [autoEnd, setAutoEnd]         = useState(null)
   const [targetMode, setTargetMode]   = useState(null)
@@ -42,6 +47,7 @@ export default function Game() {
     () => localStorage.getItem('checkline_autopass') === 'true'
   )
   const [forfeitConfirm, setForfeitConfirm] = useState(false)
+  const [flashCells, setFlashCells] = useState(null) // Set of 'row,lane' strings
 
   const side = parseInt(localStorage.getItem('checkline_side') ?? '0')
 
@@ -52,11 +58,32 @@ export default function Game() {
 
   useSocket({
     game_starting:         ({ state }) => { setState(state); clearAll(); setAutoEnd(null) },
+    opponent_hand_order:   ({ ids }) => setOppHandIds(ids),
+    discard_view:          ({ index, browserId }) => { setDiscardViewIndex(index); setDiscardBrowserId(browserId) },
     state_update: ({ state: s, lastAction }) => {
       setState(s)
       clearAll()
       setAutoEnd(null)
+      setLocalHandOrder(null)
+      setOppHandIds(null)
+      setDiscardViewIndex(s.discardViewIndex ?? 0)
+      setDiscardBrowserId(null)
       if (!s.reactionWindowOpen) { setReactionWindowMode(null); setReversalTargetMode(null); setMyPendingAction(null) }
+      // Flash cells for opponent's resolved action
+      if (lastAction && lastAction.actorSide !== side && !s.reactionWindowOpen) {
+        const p = lastAction.payload
+        const cells = new Set()
+        if (p) {
+          if (p.row !== undefined && p.lane !== undefined) cells.add(`${p.row},${p.lane}`)
+          if (p.toRow !== undefined && p.toLane !== undefined) cells.add(`${p.toRow},${p.toLane}`)
+          if (p.targetRow !== undefined && p.targetLane !== undefined) cells.add(`${p.targetRow},${p.targetLane}`)
+          if (p.pieceRow !== undefined && p.pieceLane !== undefined) cells.add(`${p.pieceRow},${p.pieceLane}`)
+        }
+        if (cells.size > 0) {
+          setFlashCells(cells)
+          setTimeout(() => setFlashCells(null), 1500)
+        }
+      }
       if (lastAction?.reactionFired === 'intercept' && lastAction?.actorSide === side) {
         const p = lastAction.payload
         let msg = 'Your action was intercepted — you cannot repeat it this turn.'
@@ -106,7 +133,7 @@ export default function Game() {
   })
 
   function clearAll() {
-    setCard(null); setPiece(null); setCycleMode(false); setDiscardMode(false); setTargetMode(null); setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
+    setCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null); setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
   }
 
   function toggleAutoPass() {
@@ -239,10 +266,13 @@ export default function Game() {
 
   if (state.phase === 'mulligan') return <Mulligan state={state} side={side} />
 
-  const me       = state.players[side]
-  const opponent = state.players[1 - side]
-  const myHand   = Array.isArray(me.hand) ? me.hand : []
-  const oppCount = opponent.hand?.count ?? 0
+  const me          = state.players[side]
+  const opponent    = state.players[1 - side]
+  const myHand      = Array.isArray(me.hand) ? me.hand : []
+  const displayHand = localHandOrder ?? myHand
+  const oppHand     = opponent.hand  // { count, ids }
+  const oppCount    = oppHand?.count ?? 0
+  const displayOppHand = oppHandIds ? { count: oppCount, ids: oppHandIds } : oppHand
   const isMyTurn = state.currentTurn === side
   const inActions = state.turnPhase === 'actions'
   const inDiscard = state.turnPhase === 'discard'
@@ -257,36 +287,56 @@ export default function Game() {
 
   const amInCheck = state.inCheck?.[side] ?? false
   const autoPassWarning = autoPassEnabled && myHand.some(c => c.type === 'Intercept' || c.type === 'Reversal')
+  const cycleCardIdx = selectedCardIdx !== null ? selectedCardIdx : (targetMode !== null ? targetMode.cardIdx : null)
+  const canCycleViaDiscard = isMyTurn && inActions && cycleCardIdx !== null && !reactionWindowMode && !enslaveMode && !bodyguardMode && state.actionsRemaining > 0
+
+  // Which hand cards glow as usable reactions during the reaction window
+  const reactionIndices = reactionWindowMode ? (() => {
+    const isBuffDebuff = reactionWindowMode.action.type === 'play_buff' || reactionWindowMode.action.type === 'play_debuff'
+    const s = new Set()
+    myHand.forEach((c, i) => {
+      if (c.type === 'Intercept' || (c.type === 'Reversal' && isBuffDebuff)) s.add(i)
+    })
+    return s
+  })() : null
 
   // ── Action handlers ────────────────────────────────────────────────
+
+  function handleReactionCardClick(i) {
+    if (!reactionWindowMode) return
+    const card = myHand[i]
+    if (!card) return
+    const isBuffDebuff = reactionWindowMode.action.type === 'play_buff' || reactionWindowMode.action.type === 'play_debuff'
+    if (card.type === 'Intercept') {
+      emit('play_reaction', { cardIndex: i })
+      setReactionWindowMode(null)
+    } else if (card.type === 'Reversal' && isBuffDebuff && !reversalTargetMode) {
+      setReversalTargetMode({ cardIdx: i })
+      emit('extend_reaction') // auto-extend once while picking a target
+    }
+  }
+
+  function handleCycle() {
+    if (cycleCardIdx === null) return
+    emit('game_action', { type: 'cycle', cardIndex: cycleCardIdx })
+    clearAll()
+  }
 
   function handleCardClick(i) {
     if (!isMyTurn || !inActions) return
 
-    if (cycleMode) {
-      emit('game_action', { type: 'cycle', cardIndex: i })
-      clearAll()
-      return
-    }
+    const card = displayHand[i]
 
-    const card = myHand[i]
-
-    if (INSTANT.has(card.type)) {
-      const typeMap = { Command: 'play_command', Disrupt: 'play_disrupt' }
-      emitAction({ type: typeMap[card.type], cardIndex: i })
-      clearAll()
-      return
-    }
-
-    if (card.type === 'Purge') {
-      emitAction({ type: 'play_purge', cardIndex: i })
-      clearAll()
+    if (INSTANT.has(card.type) || card.type === 'Purge') {
+      // Select it first — board click confirms play, discard click cycles
+      setCard(selectedCardIdx === i ? null : i)
+      setPiece(null); setTargetMode(null)
       return
     }
 
     if (PLACEABLE.has(card.type)) {
       setCard(selectedCardIdx === i ? null : i)
-      setPiece(null); setCycleMode(false); setTargetMode(null)
+      setPiece(null); setTargetMode(null)
       return
     }
 
@@ -299,16 +349,23 @@ export default function Game() {
         setTargetMode(null)
       } else {
         setTargetMode({ type, cardIdx: i, step: 1, firstPiece: null })
-        setCard(null); setPiece(null); setCycleMode(false)
+        setCard(null); setPiece(null)
       }
       return
     }
-    // Intercept / Reversal: reaction cards only — ignore click
+    // Intercept / Reversal: select for potential cycling
+    setCard(selectedCardIdx === i ? null : i)
+    setPiece(null); setTargetMode(null)
   }
 
   function handleSpaceClick(row, lane) {
     if (reversalTargetMode) {
       const { cardIdx } = reversalTargetMode
+      if (!reversalTargets?.has(`${row},${lane}`)) {
+        setErrorMsg('Invalid Reversal target — pick a highlighted piece.')
+        setTimeout(() => setErrorMsg(''), 2500)
+        return
+      }
       emit('play_reaction', { cardIndex: cardIdx, targetRow: row, targetLane: lane })
       setReversalTargetMode(null)
       setReactionWindowMode(null)
@@ -334,8 +391,6 @@ export default function Game() {
     }
 
     if (!isMyTurn || !inActions) return
-
-    if (cycleMode) { setCycleMode(false); return }
 
     // ── Target-mode handling (buff/debuff/control cards) ──
     if (targetMode) {
@@ -414,14 +469,23 @@ export default function Game() {
     const piece = state.board[row][lane]
 
     if (selectedCardIdx !== null) {
-      if (!piece) {
-        const ownRows = side === 0 ? [0, 1] : [2, 3]
-        if (!ownRows.includes(row)) {
-          setErrorMsg('Can only place pieces on your own side.')
-          setTimeout(() => setErrorMsg(''), 3000)
-        } else {
-          const card = myHand[selectedCardIdx]
-          emitAction({ type: 'place', cardIndex: selectedCardIdx, row, lane }, { pieceType: card?.type })
+      const card = displayHand[selectedCardIdx]
+      if (card) {
+        if (INSTANT.has(card.type)) {
+          const typeMap = { Command: 'play_command', Disrupt: 'play_disrupt' }
+          emitAction({ type: typeMap[card.type], cardIndex: selectedCardIdx })
+        } else if (card.type === 'Purge') {
+          emitAction({ type: 'play_purge', cardIndex: selectedCardIdx })
+        } else if (PLACEABLE.has(card.type)) {
+          if (!piece) {
+            const ownRows = side === 0 ? [0, 1] : [2, 3]
+            if (!ownRows.includes(row)) {
+              setErrorMsg('Can only place pieces on your own side.')
+              setTimeout(() => setErrorMsg(''), 3000)
+            } else {
+              emitAction({ type: 'place', cardIndex: selectedCardIdx, row, lane }, { pieceType: card.type })
+            }
+          }
         }
       }
       clearAll()
@@ -533,7 +597,7 @@ export default function Game() {
 
       <div className="opponent-area">
         <div className="player-label">{opponent.name} — {oppCount} card{oppCount !== 1 ? 's' : ''}</div>
-        <Hand cards={oppCount} faceDown />
+        <Hand cards={displayOppHand} faceDown isOpponent />
       </div>
 
       {enslaveMode && (
@@ -559,27 +623,47 @@ export default function Game() {
         </div>
       )}
 
-      <Board
-        board={previewBoard ?? state.board}
-        side={side}
-        selectedPiece={selectedPiece}
-        placingCard={selectedCardIdx !== null}
-        validMoves={validMoves}
-        validAttacks={validAttacks}
-        attackRange={attackRange}
-        cardTargets={enslaveTargets ?? bodyguardTargets ?? reversalTargets ?? cardTargets}
-        underAttack={bodyguardMode ? `${bodyguardMode.targetRow},${bodyguardMode.targetLane}` : null}
-        onSpaceClick={!isGameOver && (enslaveMode || bodyguardMode || reversalTargetMode || (isMyTurn && inActions)) ? handleSpaceClick : undefined}
-      />
+      <div className="board-area">
+        <DiscardPile
+          discardPile={state.discardPile ?? []}
+          viewIndex={discardViewIndex}
+          browserId={discardBrowserId}
+          mySide={side}
+          canCycle={canCycleViaDiscard}
+          onBrowse={delta => emit('browse_discard', { delta })}
+          onCycle={handleCycle}
+        />
+        <Board
+          board={previewBoard ?? state.board}
+          side={side}
+          selectedPiece={selectedPiece}
+          placingCard={selectedCardIdx !== null}
+          validMoves={validMoves}
+          validAttacks={validAttacks}
+          attackRange={attackRange}
+          cardTargets={enslaveTargets ?? bodyguardTargets ?? reversalTargets ?? cardTargets}
+          underAttack={bodyguardMode ? `${bodyguardMode.targetRow},${bodyguardMode.targetLane}` : null}
+          flashCells={flashCells}
+          onSpaceClick={!isGameOver && (enslaveMode || bodyguardMode || reversalTargetMode || (isMyTurn && inActions)) ? handleSpaceClick : undefined}
+        />
+        <DeckPile deckSize={state.deckSize ?? 0} />
+      </div>
 
       <div className="my-area">
         <Hand
-          cards={myHand}
+          cards={displayHand}
           selectedIdx={selectedCardIdx}
-          cycleMode={cycleMode}
           selectedSet={targetMode ? new Set([targetMode.cardIdx]) : undefined}
           interceptedIds={state.interceptedCardIds}
-          onCardClick={isMyTurn && inActions ? handleCardClick : undefined}
+          reactionIndices={reactionIndices}
+          onCardClick={reactionWindowMode ? handleReactionCardClick : (isMyTurn && inActions && !localHandOrder ? handleCardClick : undefined)}
+          onReorder={newCards => {
+            setLocalHandOrder(newCards)
+            emit('hand_drag', { ids: newCards.map(c => c.id) })
+          }}
+          onDragEnd={finalCards => {
+            emit('hand_reorder', { ids: finalCards.map(c => c.id) })
+          }}
         />
         <div className="game-controls">
           {isGameOver ? (
@@ -612,45 +696,28 @@ export default function Game() {
 
               {/* Context controls */}
               {reactionWindowMode ? (
-                (() => {
-                  const interceptIdx = myHand.findIndex(c => c.type === 'Intercept')
-                  const reversalIdx = myHand.findIndex(c => c.type === 'Reversal')
-                  const canReversal = reversalIdx !== -1 &&
-                    (reactionWindowMode.action.type === 'play_buff' || reactionWindowMode.action.type === 'play_debuff')
-                  return (
-                    <>
-                      {interceptIdx !== -1 && (
-                        <button onClick={() => { emit('play_reaction', { cardIndex: interceptIdx }); setReactionWindowMode(null) }}>Intercept</button>
-                      )}
-                      {canReversal && !reversalTargetMode && (
-                        <button className="btn-secondary" onClick={() => setReversalTargetMode({ cardIdx: reversalIdx })}>Reversal</button>
-                      )}
-                      {reversalTargetMode && <span className="waiting-turn">Click a target on the board…</span>}
-                      <button className="btn-secondary" onClick={() => emit('extend_reaction')}>Add 10s</button>
-                      <button className="btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>Pass</button>
-                      <div className="auto-end-wrap" style={{ width: 'auto', minWidth: '80px' }}>
-                        <span className="auto-end-label">
-                          {Math.max(0, Math.ceil((reactionWindowMode.ms - (Date.now() - reactionWindowMode.startedAt)) / 1000))}s
-                        </span>
-                        <div className="auto-end-track">
-                          <div className="auto-end-bar" style={{ animationDuration: `${reactionWindowMode.ms}ms` }} />
-                        </div>
-                      </div>
-                    </>
-                  )
-                })()
+                <>
+                  {reversalTargetMode
+                    ? <span className="waiting-turn">Click a target on the board for Reversal…</span>
+                    : <span className="waiting-turn">Click a highlighted card to react, or pass.</span>
+                  }
+                  <button className="btn-secondary" onClick={() => emit('extend_reaction')}>+10s</button>
+                  <button className="btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>Pass</button>
+                  <div className="auto-end-wrap" style={{ width: 'auto', minWidth: '80px' }}>
+                    <span className="auto-end-label">
+                      {Math.max(0, Math.ceil((reactionWindowMode.ms - (Date.now() - reactionWindowMode.startedAt)) / 1000))}s
+                    </span>
+                    <div className="auto-end-track">
+                      <div className="auto-end-bar" style={{ animationDuration: `${reactionWindowMode.ms}ms` }} />
+                    </div>
+                  </div>
+                </>
               ) : state?.reactionWindowOpen && isMyTurn ? (
                 <span className="waiting-turn">Opponent is considering a reaction…</span>
               ) : (
                 <>
-                  {!enslaveMode && !bodyguardMode && isMyTurn && inActions && (
-                    <button
-                      className={`btn-secondary${cycleMode ? ' btn-active' : ''}`}
-                      disabled={state.actionsRemaining <= 0}
-                      onClick={() => { setCycleMode(c => !c); setCard(null); setPiece(null); setTargetMode(null) }}
-                    >
-                      Cycle Card
-                    </button>
+                  {isMyTurn && inActions && selectedCardIdx !== null && (INSTANT.has(displayHand[selectedCardIdx]?.type) || displayHand[selectedCardIdx]?.type === 'Purge') && (
+                    <span className="waiting-turn">Click anywhere on the board to play {displayHand[selectedCardIdx]?.type}</span>
                   )}
                   {!enslaveMode && !bodyguardMode && selectedPiece && selectedPieceType !== 'King' && isMyTurn && inActions && (
                     <button className="btn-secondary" onClick={handleSacrifice}>Sacrifice</button>

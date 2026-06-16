@@ -1,8 +1,6 @@
 export default function GameInfo({ state, side }) {
-  const me = state.players[side]
   const opponent = state.players[1 - side]
   const isMyTurn = state.currentTurn === side
-  const topDiscard = state.discardPile?.[0]
 
   return (
     <div className="game-info">
@@ -22,14 +20,6 @@ export default function GameInfo({ state, side }) {
       {state.inCheck?.[1 - side] && (
         <span className="check-indicator">{opponent.name} in check</span>
       )}
-
-      <div className="deck-discard">
-        <span>Deck: {state.deckSize}</span>
-        <span>
-          Discard: {state.discardPile?.length ?? 0}
-          {topDiscard && ` (top: ${topDiscard.type})`}
-        </span>
-      </div>
     </div>
   )
 }

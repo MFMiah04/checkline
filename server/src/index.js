@@ -684,6 +684,21 @@ io.on('connection', socket => {
     if (card.type !== 'Intercept' && card.type !== 'Reversal')
       return socket.emit('error', { message: 'Not a reaction card.' })
 
+    // Validate Reversal target BEFORE consuming card or closing window
+    if (card.type === 'Reversal') {
+      const { action } = room.pendingAction
+      if (action.type === 'play_buff' || action.type === 'play_debuff') {
+        const newTarget = room.board[targetRow]?.[targetLane]
+        const redirectValid = action.type === 'play_buff'
+          ? isValidBuffTarget(newTarget) && !(targetRow === action.targetRow && targetLane === action.targetLane)
+          : isValidDebuffTarget(newTarget) && !(targetRow === action.targetRow && targetLane === action.targetLane)
+        if (!redirectValid) {
+          return socket.emit('error', { message: 'Invalid Reversal target — pick a valid highlighted piece.' })
+          // Window stays open, card not consumed
+        }
+      }
+    }
+
     clearReactionTimer(room.code)
     room.reactionWindowOpen = false
     room.reactionWindowExpiresAt = null
@@ -714,31 +729,13 @@ io.on('connection', socket => {
     }
 
     if (card.type === 'Reversal') {
-      // Only valid for play_buff and play_debuff
       if (action.type !== 'play_buff' && action.type !== 'play_debuff') {
-        // Invalid use — treat as pass
+        // Not applicable — treat as pass (card consumed)
         room.pendingAction = { action, actorSide }
         executePendingAction(room)
         return
       }
-
-      const newTarget = room.board[targetRow]?.[targetLane]
-      let redirectValid = false
-      if (action.type === 'play_buff') {
-        redirectValid = isValidBuffTarget(newTarget) &&
-          !(targetRow === action.targetRow && targetLane === action.targetLane)
-      } else {
-        redirectValid = isValidDebuffTarget(newTarget) &&
-          !(targetRow === action.targetRow && targetLane === action.targetLane)
-      }
-
-      if (!redirectValid) {
-        // Invalid redirect — treat as pass (Reversal card already consumed)
-        room.pendingAction = { action, actorSide }
-        executePendingAction(room)
-        return
-      }
-
+      // Target already validated above — redirect
       const redirectedAction = { ...action, targetRow, targetLane }
       room.pendingAction = { action: redirectedAction, actorSide }
       executePendingAction(room, 'reversal')
@@ -897,6 +894,44 @@ io.on('connection', socket => {
   })
 
   // ── Forfeit ───────────────────────────────────────────────────────
+  // ── Hand drag (intermediate snap — lightweight, opponent only) ────────
+  socket.on('hand_drag', ({ ids }) => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    if (!Array.isArray(ids) || ids.length !== player.hand.length) return
+    const handMap = new Map(player.hand.map(c => [c.id, c]))
+    if (!ids.every(id => handMap.has(id))) return
+    player.hand = ids.map(id => handMap.get(id))
+    const opponent = room.players.find(p => p.side !== player.side)
+    if (opponent?.socketId) {
+      io.to(opponent.socketId).emit('opponent_hand_order', { ids })
+    }
+  })
+
+  // ── Hand reorder (final drop — full state_update) ──────────────────
+  socket.on('hand_reorder', ({ ids }) => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    if (!Array.isArray(ids) || ids.length !== player.hand.length) return
+    const handMap = new Map(player.hand.map(c => [c.id, c]))
+    if (!ids.every(id => handMap.has(id))) return
+    player.hand = ids.map(id => handMap.get(id))
+    emitStateUpdate(room)
+  })
+
+  // ── Discard pile browse ────────────────────────────────────────────
+  socket.on('browse_discard', ({ delta }) => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    if (!Number.isInteger(delta) || Math.abs(delta) > 1) return
+    const max = Math.max(0, room.discardPile.length - 1)
+    room.discardViewIndex = Math.max(0, Math.min(max, (room.discardViewIndex ?? 0) + delta))
+    io.to(room.code).emit('discard_view', { index: room.discardViewIndex, browserId: player.side })
+  })
+
   socket.on('forfeit', () => {
     const result = getRoomBySocket(socket.id)
     if (!result) return

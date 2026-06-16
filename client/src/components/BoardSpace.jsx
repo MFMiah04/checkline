@@ -1,6 +1,6 @@
 const SYMBOLS = { King: '♚', Queen: '♛', Rook: '♜', Bishop: '♝', Knight: '♞', Pawn: '♟' }
 
-export default function BoardSpace({ piece, row, lane, side, isSelected, placingCard, isValidMove, isValidAttack, isAttackRange, isCardTarget, isUnderAttack, onClick }) {
+export default function BoardSpace({ piece, row, lane, side, isSelected, placingCard, isValidMove, isValidAttack, isAttackRange, isCardTarget, isUnderAttack, isFlashing, onClick }) {
   const isOwnSide  = side === 0 ? row <= 1 : row >= 2
   const isOwnPiece = piece?.owner === side
   const cantAct    = isOwnPiece && !piece.canActThisTurn
@@ -13,6 +13,7 @@ export default function BoardSpace({ piece, row, lane, side, isSelected, placing
   else if (isAttackRange && !isValidMove) cls += ' attack-range'
   if (isCardTarget && !isSelected && !isValidMove && !isValidAttack) cls += ' card-target'
   if (isUnderAttack) cls += ' under-attack'
+  if (isFlashing && !isUnderAttack) cls += ' last-action-flash'
   if (placingCard && isOwnSide && !piece) cls += ' place-target'
   if (onClick)      cls += ' clickable'
 

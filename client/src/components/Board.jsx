@@ -1,6 +1,6 @@
 import BoardSpace from './BoardSpace'
 
-export default function Board({ board, side, selectedPiece, placingCard, validMoves, validAttacks, attackRange, cardTargets, underAttack, onSpaceClick }) {
+export default function Board({ board, side, selectedPiece, placingCard, validMoves, validAttacks, attackRange, cardTargets, underAttack, flashCells, onSpaceClick }) {
   const rowOrder = side === 0 ? [3, 2, 1, 0] : [0, 1, 2, 3]
 
   return (
@@ -21,6 +21,7 @@ export default function Board({ board, side, selectedPiece, placingCard, validMo
               isAttackRange={attackRange?.has(`${rowIdx},${laneIdx}`) ?? false}
               isCardTarget={cardTargets?.has(`${rowIdx},${laneIdx}`) ?? false}
               isUnderAttack={underAttack === `${rowIdx},${laneIdx}`}
+              isFlashing={flashCells?.has(`${rowIdx},${laneIdx}`) ?? false}
               onClick={onSpaceClick ? () => onSpaceClick(rowIdx, laneIdx) : undefined}
             />
           ))}

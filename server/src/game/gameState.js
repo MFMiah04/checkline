@@ -34,6 +34,7 @@ export function initGameState(room) {
     board,
     deck,
     discardPile,
+    discardViewIndex: 0,         // shared browse cursor for discard pile
     pendingAction: null,
     reactionWindowOpen: false,
     reactionWindowExpiresAt: null,
@@ -94,7 +95,7 @@ export function projectState(room, playerIndex) {
       name: p.name,
       side: p.side,
       mulliganDone: p.mulliganDone,
-      hand: i === playerIndex ? p.hand : { count: p.hand.length }
+      hand: i === playerIndex ? p.hand : { count: p.hand.length, ids: p.hand.map(c => c.id) }
     }))
   }
 }
