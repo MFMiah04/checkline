@@ -19,6 +19,10 @@ export default function GameInfo({ state, side }) {
         </div>
       )}
 
+      {state.inCheck?.[1 - side] && (
+        <span className="check-indicator">{opponent.name} in check</span>
+      )}
+
       <div className="deck-discard">
         <span>Deck: {state.deckSize}</span>
         <span>

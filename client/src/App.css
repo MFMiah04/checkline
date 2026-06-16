@@ -114,14 +114,46 @@ button:disabled {
 
 /* ── Game layout ─────────────────────────────────────────────────── */
 
-.game-loading,
-.game-over {
+.game-loading {
   text-align: center;
   padding: 2rem;
 }
 
-.game-over h1 {
-  margin-bottom: 0.5rem;
+/* ── Game-over banner (inline, board stays visible) ──────────────────── */
+
+.game-over-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+}
+
+.game-over-win {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #81c784;
+}
+
+.game-over-lose {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #ef5350;
+}
+
+.game-over-sub {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.play-again-count {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  align-self: center;
 }
 
 .game {
@@ -219,6 +251,7 @@ button:disabled {
 }
 
 .board-space {
+  position: relative;
   width: 95px;
   height: 95px;
   background: #16213e;
@@ -228,6 +261,21 @@ button:disabled {
   align-items: center;
   justify-content: center;
   transition: border-color 0.1s;
+}
+
+.piece-intercepted-label {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: #ff6b6b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .board-space.own-side {
@@ -266,6 +314,18 @@ button:disabled {
 .board-space.valid-attack {
   border-color: rgba(239, 83, 80, 0.7);
   background-color: rgba(239, 83, 80, 0.1);
+}
+
+.board-space.under-attack {
+  border-color: #ef5350;
+  border-width: 2px;
+  background-color: rgba(239, 83, 80, 0.18);
+  animation: pulse-attack 1s ease-in-out infinite;
+}
+
+@keyframes pulse-attack {
+  0%, 100% { background-color: rgba(239, 83, 80, 0.18); }
+  50%       { background-color: rgba(239, 83, 80, 0.35); }
 }
 
 .board-space.valid-attack:hover {
@@ -312,7 +372,8 @@ button:disabled {
 }
 
 .piece.cant-act {
-  opacity: 0.4;
+  opacity: 0.32;
+  filter: grayscale(0.7);
 }
 
 .piece-buff {
@@ -383,6 +444,22 @@ button:disabled {
 .card.face-down {
   background: #0e1930;
   border-color: #1a2a45;
+}
+
+.card.intercepted {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  cursor: not-allowed;
+  border-top-color: rgba(255, 107, 107, 0.6) !important;
+}
+
+.card-intercepted-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #ff6b6b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
 }
 
 .card-name {
@@ -477,6 +554,65 @@ button:disabled {
   gap: 0.75rem;
 }
 
+/* ── Card targeting highlight ────────────────────────────────────── */
+
+.board-space.card-target {
+  border-color: rgba(255, 213, 79, 0.6);
+  background-color: rgba(255, 213, 79, 0.08);
+}
+
+.board-space.card-target:hover {
+  background-color: rgba(255, 213, 79, 0.2);
+}
+
+/* ── Check indicators ────────────────────────────────────────────── */
+
+.check-warning {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  width: 100%;
+  text-align: center;
+}
+
+.check-indicator {
+  color: #ff6b6b;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* ── Enslave prompt banner ───────────────────────────────────────────── */
+
+.enslave-prompt {
+  color: #81c784;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(129, 199, 132, 0.1);
+  border: 1px solid rgba(129, 199, 132, 0.35);
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  width: 100%;
+  text-align: center;
+}
+
+/* ── Bodyguard prompt banner ─────────────────────────────────────── */
+
+.bodyguard-prompt {
+  color: #ffb74d;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(255, 183, 77, 0.1);
+  border: 1px solid rgba(255, 183, 77, 0.35);
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  width: 100%;
+  text-align: center;
+}
+
 /* ── Auto-end turn countdown ─────────────────────────────────────── */
 
 @keyframes drain {
@@ -519,3 +655,85 @@ button:disabled {
 .card.buff     { border-top-color: #81c784; }
 .card.debuff   { border-top-color: #e57373; }
 .card.reaction { border-top-color: #ffd54f; }
+
+/* ── Reaction window banner ──────────────────────────────────────────── */
+
+.reaction-window-banner {
+  color: #ffd54f;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(255, 213, 79, 0.1);
+  border: 1px solid rgba(255, 213, 79, 0.35);
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  width: 100%;
+  text-align: center;
+}
+
+/* ── Forfeit modal ───────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-dialog {
+  background: #1a2340;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 12px;
+  padding: 1.75rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 240px;
+  text-align: center;
+}
+
+.modal-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #ff6b6b;
+}
+
+.modal-body {
+  font-size: 0.9rem;
+  color: #8899bb;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.btn-danger {
+  background: rgba(255, 107, 107, 0.15);
+  border-color: rgba(255, 107, 107, 0.5);
+  color: #ff6b6b;
+}
+.btn-danger:hover {
+  background: rgba(255, 107, 107, 0.25);
+}
+
+.forfeit-btn {
+  opacity: 0.45;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  align-self: center;
+}
+.forfeit-btn:hover {
+  opacity: 1;
+}
+
+/* ── Auto-pass ───────────────────────────────────────────────────────── */
+
+.auto-pass-toggle.btn-warning {
+  border-color: rgba(255, 213, 79, 0.8);
+  color: #ffd54f;
+}

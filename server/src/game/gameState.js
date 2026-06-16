@@ -1,4 +1,5 @@
 import { createDeck, drawCard } from './deck.js'
+import { findKing, isInCheck } from './rules.js'
 
 export function initGameState(room) {
   const deck = createDeck()
@@ -29,17 +30,22 @@ export function initGameState(room) {
     commandUsedThisTurn: false,
     disruptUsedThisTurn: false,
     disruptNextTurn: false,
+    interceptedCardIds: [],      // card IDs locked by Intercept this turn
     board,
     deck,
     discardPile,
     pendingAction: null,
     reactionWindowOpen: false,
     reactionWindowExpiresAt: null,
+    pendingBodyguard: null,
     bodyguardPromptOpen: false,
     bodyguardExpiresAt: null,
     enslavePromptOpen: false,
     enslaveExpiresAt: null,
-    winner: null
+    pendingEnslaved: null,       // { piece, validSpaces, attackerRow, attackerLane }
+    winner: null,
+    endReason: null,
+    playAgainVotes: new Set()
   })
 }
 
@@ -51,6 +57,7 @@ export function startTurn(room) {
   room.disruptNextTurn = false
   room.commandUsedThisTurn = false
   room.disruptUsedThisTurn = false
+  room.interceptedCardIds = []
 
   // Auto-draw for the current player
   const currentPlayer = room.players[room.currentTurn]
@@ -60,7 +67,7 @@ export function startTurn(room) {
   // Reset canActThisTurn for all pieces owned by current player
   for (const row of room.board) {
     for (const piece of row) {
-      if (piece?.owner === room.currentTurn) piece.canActThisTurn = true
+      if (piece?.owner === room.currentTurn) { piece.canActThisTurn = true; piece.interceptedThisTurn = false }
     }
   }
 
@@ -72,9 +79,17 @@ export function startTurn(room) {
 // Hides opponent's hand contents (sends count instead).
 export function projectState(room, playerIndex) {
   const { deck, players, ...rest } = room
+  const inCheck = room.board
+    ? [0, 1].map(side => {
+        const k = findKing(room.board, side)
+        return k ? isInCheck(room.board, k.row, k.lane, side) : false
+      })
+    : [false, false]
   return {
     ...rest,
     deckSize: deck.length,
+    inCheck,
+    playAgainVotes: room.phase === 'ended' ? [...(room.playAgainVotes || [])] : [],
     players: players.map((p, i) => ({
       name: p.name,
       side: p.side,

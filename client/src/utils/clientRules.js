@@ -13,8 +13,12 @@ function isPathClear(board, fromRow, fromLane, toRow, toLane) {
   return true
 }
 
+export function isPinned(piece)   { return piece?.debuff?.type === 'Pin' }
+export function isFatigued(piece) { return piece?.debuff?.type === 'Fatigue' }
+
 export function isValidMove(board, piece, fromRow, fromLane, toRow, toLane) {
   if (!inBounds(toRow, toLane)) return false
+  if (piece.debuff?.type === 'Pin') return false
   const ownRows = piece.owner === 0 ? [0, 1] : [2, 3]
   if (!ownRows.includes(toRow)) return false
   if (board[toRow][toLane] !== null) return false
@@ -88,8 +92,19 @@ export function getAttackRange(board, piece, fromRow, fromLane) {
 
 export function isValidAttack(board, piece, fromRow, fromLane, targetRow, targetLane) {
   if (!inBounds(targetRow, targetLane)) return false
+  if (piece.debuff?.type === 'Fatigue') return false
   const target = board[targetRow][targetLane]
-  if (!target || target.owner === piece.owner || target.type === 'King') return false
+  if (!target || target.owner === piece.owner) return false
+  if (target.type === 'King') {
+    // King can only be attacked when a Bodyguard-buffed friendly piece is orthogonally adjacent
+    const hasBodyguard = [[1,0],[-1,0],[0,1],[0,-1]].some(([dr, dl]) => {
+      const r = targetRow + dr, l = targetLane + dl
+      if (r < 0 || r > 3 || l < 0 || l > 4) return false
+      const p = board[r][l]
+      return p?.owner === target.owner && p?.buff?.type === 'Bodyguard'
+    })
+    if (!hasBodyguard) return false
+  }
 
   const dr = targetRow - fromRow, dl = targetLane - fromLane
   const absDr = Math.abs(dr), absDl = Math.abs(dl)

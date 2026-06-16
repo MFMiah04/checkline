@@ -1,13 +1,11 @@
 import CardComponent from './CardComponent'
 
-export default function Hand({ cards, faceDown = false, selected, onCardClick }) {
+export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx, interceptedIds, onCardClick }) {
   if (faceDown) {
     const count = typeof cards === 'number' ? cards : (cards?.count ?? 0)
     return (
       <div className="hand opponent-hand">
-        {Array.from({ length: count }, (_, i) => (
-          <CardComponent key={i} faceDown />
-        ))}
+        {Array.from({ length: count }, (_, i) => <CardComponent key={i} faceDown />)}
         {count === 0 && <span className="hand-empty">No cards</span>}
       </div>
     )
@@ -20,7 +18,8 @@ export default function Hand({ cards, faceDown = false, selected, onCardClick })
         <CardComponent
           key={card.id}
           card={card}
-          selected={selected?.has(i)}
+          selected={selectedSet?.has(i) || selectedIdx === i}
+          intercepted={interceptedIds?.includes(card.id) ?? false}
           onClick={onCardClick ? () => onCardClick(i) : undefined}
         />
       ))}

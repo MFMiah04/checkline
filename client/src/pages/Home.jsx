@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getSocket } from '../hooks/useSocket'
 
 export default function Home() {
-  const [name, setName] = useState('')
+  const [name, setName] = useState(() => localStorage.getItem('checkline_name') || '')
   const [joinCode, setJoinCode] = useState('')
   const [mode, setMode] = useState(null) // 'host' | 'join'
   const [error, setError] = useState('')

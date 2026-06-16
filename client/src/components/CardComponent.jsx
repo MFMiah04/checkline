@@ -8,7 +8,7 @@ const CATEGORY = {
   Intercept: 'reaction', Reversal: 'reaction'
 }
 
-export default function CardComponent({ card, faceDown = false, selected = false, onClick }) {
+export default function CardComponent({ card, faceDown = false, selected = false, intercepted = false, onClick }) {
   if (faceDown) {
     return <div className="card face-down" />
   }
@@ -17,9 +17,10 @@ export default function CardComponent({ card, faceDown = false, selected = false
 
   return (
     <div
-      className={`card ${category}${selected ? ' selected' : ''}${onClick ? ' clickable' : ''}`}
-      onClick={onClick}
+      className={`card ${category}${selected ? ' selected' : ''}${intercepted ? ' intercepted' : ''}${onClick && !intercepted ? ' clickable' : ''}`}
+      onClick={intercepted ? undefined : onClick}
     >
+      {intercepted && <span className="card-intercepted-label">Intercepted</span>}
       <span className="card-name">{card.type}</span>
       <span className="card-category">{category}</span>
     </div>
