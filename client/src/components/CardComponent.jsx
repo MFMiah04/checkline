@@ -25,7 +25,7 @@ const TOOLTIP = {
   Enslave:    'After capturing an enemy piece, place it on your side instead of discarding.',
   Shield:     'Protect a friendly piece. The next attack against it is blocked.',
   Bodyguard:  'Assign a friendly piece as a Bodyguard. It will sacrifice itself to protect the target.',
-  Protection: 'Your King cannot be attacked this turn.',
+  Protection: 'Discard any Debuff from this piece. This piece cannot receive Debuffs while Protection is attached.',
   Pin:        'Debuff an enemy piece. It cannot move until the debuff is removed.',
   Fatigue:    'Debuff an enemy piece. It cannot attack until the debuff is removed.',
   Silence:    'Debuff an enemy piece. It cannot have buffs applied to it.',

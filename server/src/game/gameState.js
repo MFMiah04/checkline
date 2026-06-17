@@ -55,6 +55,7 @@ export function initGameState(room) {
 export function startTurn(room) {
   room.phase = 'playing'
   room.actionsRemaining = room.disruptNextTurn ? 1 : 2
+  room.actionsMax = room.disruptNextTurn ? 1 : 2
   room.disruptNextTurn = false
   room.commandUsedThisTurn = false
   room.disruptUsedThisTurn = false

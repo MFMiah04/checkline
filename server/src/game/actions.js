@@ -93,7 +93,7 @@ export function applyDirectAttack(room, player, { row, lane, targetRow, targetLa
     captured.buff = null
     piece.canActThisTurn = false
     spendAction(room, player)
-    return { lastAction: la }
+    return { lastAction: { ...la, secondaryEffect: 'shield_absorbed' } }
   }
 
   // Bodyguard protection
@@ -142,10 +142,10 @@ export function applyDirectAttack(room, player, { row, lane, targetRow, targetLa
       room.pendingEnslaved = { piece: captured, validSpaces, attackerRow: row, attackerLane: lane }
       room.enslavePromptOpen = true
       room.enslaveExpiresAt = Date.now() + 15000
-      return { lastAction: la, enslavePrompt: true, validSpaces, pieceType: captured.type }
+      return { lastAction: { ...la, secondaryEffect: 'enslave_placed' }, enslavePrompt: true, validSpaces, pieceType: captured.type }
     } else {
       room.discardPile.unshift({ type: captured.type, id: captured.id })
-      return { lastAction: la }
+      return { lastAction: { ...la, secondaryEffect: 'enslave_placed' } }
     }
   }
 
@@ -458,10 +458,10 @@ export function resolveCapture(room, attackerRow, attackerLane, targetRow, targe
       room.pendingEnslaved = { piece: captured, validSpaces, attackerRow, attackerLane }
       room.enslavePromptOpen = true
       room.enslaveExpiresAt = Date.now() + 15000
-      return { lastAction: la, enslavePrompt: true, validSpaces, pieceType: captured.type }
+      return { lastAction: { ...la, secondaryEffect: 'enslave_placed' }, enslavePrompt: true, validSpaces, pieceType: captured.type }
     } else {
       room.discardPile.unshift({ type: captured.type, id: captured.id })
-      return { lastAction: la }
+      return { lastAction: { ...la, secondaryEffect: 'enslave_placed' } }
     }
   }
 

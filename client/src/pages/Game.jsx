@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getSocket, useSocket } from '../hooks/useSocket'
 import Board from '../components/Board'
@@ -6,6 +6,9 @@ import Hand from '../components/Hand'
 import GameInfo from '../components/GameInfo'
 import DeckPile from '../components/DeckPile'
 import DiscardPile from '../components/DiscardPile'
+import CaptureSlide from '../components/CaptureSlide'
+import ReturnSlide from '../components/ReturnSlide'
+import DeckSlide from '../components/DeckSlide'
 import { isValidMove, isValidAttack, getAttackRange, isPinned, isFatigued } from '../utils/clientRules'
 
 const PLACEABLE   = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
@@ -22,7 +25,8 @@ export default function Game() {
   const { code } = useParams()
   const navigate = useNavigate()
   const [state, setState]             = useState(null)
-  const [selectedCardIdx, setCard]    = useState(null)
+  const [liftedCard, setLiftedCard]   = useState(null)
+  // null | { card: {id, type, ...}, serverIdx: number } — card lifted from hand
   const [selectedPiece, setPiece]     = useState(null)
   const [discardMode, setDiscardMode] = useState(false)
   const [localHandOrder, setLocalHandOrder] = useState(null)
@@ -30,24 +34,64 @@ export default function Game() {
   const [discardViewIndex, setDiscardViewIndex] = useState(0)
   const [discardBrowserId, setDiscardBrowserId] = useState(null)
   const [errorMsg, setErrorMsg]       = useState('')
-  const [autoEnd, setAutoEnd]         = useState(null)
   const [targetMode, setTargetMode]   = useState(null)
-  // targetMode: null | { type: 'buff'|'debuff'|'reposition'|'swap'|'dispel'|'return', cardIdx, step: 1|2, firstPiece: {row,lane}|null }
+  // targetMode: null | { type: 'buff'|'debuff'|'reposition'|'swap'|'dispel'|'return', cardId, step: 1|2, firstPiece: {row,lane}|null }
   const [enslaveMode, setEnslaveMode] = useState(null)
   // enslaveMode: null | { validSpaces: [{row, lane}], pieceType: string }
   const [bodyguardMode, setBodyguardMode] = useState(null)
   // bodyguardMode: null | { options, isKingAttack, targetType, targetRow, targetLane }
   const [reactionWindowMode, setReactionWindowMode] = useState(null)
-  // null | { action, ms, startedAt: number } — set when this player can react to opponent's action
+  // null | { action, ms } — set when this player can react to opponent's action
   const [reversalTargetMode, setReversalTargetMode] = useState(null)
   // null | { cardIdx: number } — picking a Reversal redirect target on the board
   const [myPendingAction, setMyPendingAction] = useState(null)
   // null | enriched action object — what this player just emitted, for preview while window is open
-  const [autoPassEnabled, setAutoPassEnabled] = useState(
-    () => localStorage.getItem('checkline_autopass') === 'true'
-  )
   const [forfeitConfirm, setForfeitConfirm] = useState(false)
-  const [flashCells, setFlashCells] = useState(null) // Set of 'row,lane' strings
+  // ── Animation state ────────────────────────────────────────────────
+  const [floatingPiece, setFloatingPiece]       = useState(null)
+  // null | { piece, fromRow, fromLane } — own board piece currently floating
+  const [boardHoveredCell, setBoardHoveredCell] = useState(null)
+  // null | { row, lane } — board cell mouse is over
+  const [confirmTarget, setConfirmTarget]       = useState(null)
+  // null | { row, lane } — brief gold pulse when action confirmed
+  const [captureSlides, setCaptureSlides]        = useState([])
+  // [{ piece, fromPos, toPos, isOwn }] — pieces/cards sliding to discard pile
+  const [handHovered, setHandHovered]           = useState(false)
+  const [isShaking, setIsShaking]               = useState(false)
+  const [discardHovered, setDiscardHovered]      = useState(false)
+  const [attackPending, setAttackPending]        = useState(null)
+  // null | { fromRow, fromLane, toRow, toLane, piece }
+  const [returnSlide, setReturnSlide]            = useState(null)
+  // null | { piece, fromPos, toPos, isOwn }
+
+  // ── Opponent visual state ──────────────────────────────────────────
+  const [oppSelectedPiece, setOppSelectedPiece] = useState(null)
+  // null | { row, lane }
+  const [oppHoveredCell, setOppHoveredCell]     = useState(null)
+  // null | { row, lane }
+  const [oppSelectedCardType, setOppSelectedCardType] = useState(null)
+  // null | string — card type the opponent currently has selected from their hand
+  const [oppLiftedCardId, setOppLiftedCardId] = useState(null)
+  const [oppDiscardHovered, setOppDiscardHovered] = useState(false)
+  const [deckHovered, setDeckHovered]         = useState(false)
+  const [oppDeckHovered, setOppDeckHovered]   = useState(false)
+  const [deckSlide, setDeckSlide]               = useState(null)
+  const [handInsertIndex, setHandInsertIndex]   = useState(null)
+  // null | number — where to insert the lifted card when hovering back over hand
+
+  const [reactionPct, setReactionPct] = useState(100)
+
+  // ── Refs ───────────────────────────────────────────────────────────
+  const boardSpaceRefs    = useRef({})  // 'row,lane' → DOM el
+  const discardPileRef    = useRef(null)
+  const deckPileRef       = useRef(null)
+  const ownHandAreaRef    = useRef(null)
+  const oppHandAreaRef    = useRef(null)
+  const hoverThrottleRef  = useRef(0)
+  const hoverTrailingRef  = useRef(null)
+  const reactionTimerRef  = useRef(null)
+  // Tracks whether we cleared select_card_type for insert mode (so we can restore on leave)
+  const insertRevealedRef = useRef(false)
 
   const side = parseInt(localStorage.getItem('checkline_side') ?? '0')
 
@@ -56,34 +100,178 @@ export default function Game() {
     if (token) emit('reconnect', { token, code })
   }, [code])
 
+  // ── Reaction timer visual countdown ───────────────────────────────
+  useEffect(() => {
+    if (!reactionWindowMode) { setReactionPct(100); reactionTimerRef.current = null; return }
+    reactionTimerRef.current = {
+      remainingMs: reactionWindowMode.ms,
+      lastTime: Date.now(),
+      drainMult: handHovered ? 1 : 4,
+      totalMs: reactionWindowMode.ms,
+    }
+    const id = setInterval(() => {
+      const ref = reactionTimerRef.current
+      if (!ref) return
+      const now = Date.now()
+      const elapsed = (now - ref.lastTime) * ref.drainMult
+      ref.remainingMs = Math.max(0, ref.remainingMs - elapsed)
+      ref.lastTime = now
+      setReactionPct(ref.remainingMs / ref.totalMs * 100)
+    }, 50)
+    return () => clearInterval(id)
+  }, [reactionWindowMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (reactionTimerRef.current) {
+      reactionTimerRef.current.drainMult = handHovered ? 1 : 4
+    }
+  }, [handHovered])
+
   useSocket({
-    game_starting:         ({ state }) => { setState(state); clearAll(); setAutoEnd(null) },
+    game_starting:         ({ state }) => { setState(state); clearAll() },
     opponent_hand_order:   ({ ids }) => setOppHandIds(ids),
     discard_view:          ({ index, browserId }) => { setDiscardViewIndex(index); setDiscardBrowserId(browserId) },
+    opponent_select_piece: payload => {
+      setOppSelectedPiece(payload?.row != null ? { row: payload.row, lane: payload.lane } : null)
+    },
+    opponent_hover_space: payload => {
+      setOppHoveredCell(payload?.row != null ? { row: payload.row, lane: payload.lane } : null)
+    },
+    opponent_select_card_type: ({ cardType, cardId }) => {
+      setOppSelectedCardType(cardType ?? null)
+      setOppLiftedCardId(cardId ?? null)
+    },
+    opponent_hover_discard: ({ hovering }) => setOppDiscardHovered(hovering),
+    opponent_hover_deck:    ({ hovering }) => setOppDeckHovered(hovering),
     state_update: ({ state: s, lastAction }) => {
+      // ── Trigger capture slide BEFORE applying new state ──────────────
+      // (so we can read the piece from the old board while refs still match)
+      // ── Deck → hand slide on cycle ────────────────────────────────────
+      if (lastAction?.type === 'cycle') {
+        const deckEl = deckPileRef.current
+        const isOwn  = lastAction.actorSide === side
+        const toEl   = isOwn ? ownHandAreaRef.current : oppHandAreaRef.current
+        if (deckEl && toEl) {
+          const fr = deckEl.getBoundingClientRect()
+          const tr = toEl.getBoundingClientRect()
+          setDeckSlide({
+            fromPos: { x: fr.left + fr.width / 2, y: fr.top + fr.height / 2 },
+            toPos:   { x: tr.right - 20, y: isOwn ? tr.top + tr.height / 2 : tr.bottom },
+          })
+        }
+      }
+
+      if (lastAction && !s.reactionWindowOpen) {
+        const la = lastAction
+        const p  = la.payload
+        const toEl = discardPileRef.current
+
+        // Purge: all buff/debuff tokens slide to discard
+        if (la.type === 'play_purge' && toEl) {
+          const currentBoard = state?.board
+          const slides = []
+          const tr = toEl.getBoundingClientRect()
+          for (let r = 0; r <= 3; r++) {
+            for (let l = 0; l <= 4; l++) {
+              const pc = currentBoard?.[r]?.[l]
+              if (!pc) continue
+              const fromEl = boardSpaceRefs.current[`${r},${l}`]
+              if (!fromEl) continue
+              const fr = fromEl.getBoundingClientRect()
+              if (pc.buff)   slides.push({ piece: { type: pc.buff.type,   owner: pc.owner }, fromPos: { x: fr.left, y: fr.top }, toPos: { x: tr.left, y: tr.top }, isOwn: pc.owner === side })
+              if (pc.debuff) slides.push({ piece: { type: pc.debuff.type, owner: pc.owner }, fromPos: { x: fr.left, y: fr.top }, toPos: { x: tr.left, y: tr.top }, isOwn: pc.owner === side })
+            }
+          }
+          if (slides.length > 0) setCaptureSlides(slides)
+        }
+
+        // Capture / sacrifice / bodyguard: piece slides to discard
+        let slideRow, slideLane, isShieldSlide = false
+        if (la.type === 'direct_attack' && la.secondaryEffect !== 'shield_absorbed' && la.secondaryEffect !== 'enslave_placed') {
+          slideRow = p.targetRow; slideLane = p.targetLane
+        } else if (la.type === 'direct_attack' && la.secondaryEffect === 'shield_absorbed') {
+          slideRow = p.targetRow; slideLane = p.targetLane; isShieldSlide = true
+        } else if (la.type === 'direct_sacrifice') {
+          slideRow = p.row; slideLane = p.lane
+        } else if (la.type === 'bodyguard_save') {
+          slideRow = p.bodyguardRow; slideLane = p.bodyguardLane
+        }
+
+        if (slideRow != null && slideLane != null) {
+          const currentBoard = state?.board
+          const pieceToSlide = isShieldSlide
+            ? currentBoard?.[slideRow]?.[slideLane]?.buff
+            : currentBoard?.[slideRow]?.[slideLane]
+
+          if (pieceToSlide && toEl) {
+            const fromEl = boardSpaceRefs.current[`${slideRow},${slideLane}`]
+            if (fromEl) {
+              const fr = fromEl.getBoundingClientRect()
+              const tr = toEl.getBoundingClientRect()
+              setCaptureSlides([{
+                piece:   pieceToSlide,
+                fromPos: { x: fr.left, y: fr.top },
+                toPos:   { x: tr.left, y: tr.top },
+                isOwn:   pieceToSlide.owner === side,
+              }])
+            }
+          }
+        }
+      }
+
       setState(s)
-      clearAll()
-      setAutoEnd(null)
+
+      if (attackPending && !s.reactionWindowOpen) {
+        // Attack resolved — trigger ReturnSlide (piece moves from target back to origin)
+        const toEl  = boardSpaceRefs.current[`${attackPending.toRow},${attackPending.toLane}`]
+        const fromEl = boardSpaceRefs.current[`${attackPending.fromRow},${attackPending.fromLane}`]
+        if (toEl && fromEl) {
+          const tr = toEl.getBoundingClientRect()
+          const fr = fromEl.getBoundingClientRect()
+          setReturnSlide({
+            piece:   attackPending.piece,
+            fromPos: { x: tr.left, y: tr.top },
+            toPos:   { x: fr.left, y: fr.top },
+            isOwn:   true,
+          })
+          setBoardHoveredCell(null)
+          // floatingPiece stays set — hides origin piece until ReturnSlide.onDone
+          setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null)
+          setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
+          setDiscardHovered(false); setConfirmTarget(null)
+        } else {
+          clearAll()
+        }
+        setAttackPending(null)
+      } else if (!attackPending) {
+        if (!returnSlide) {
+          clearAll()
+        } else {
+          // ReturnSlide is playing — don't cancel it; do everything else
+          setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null)
+          setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
+          setDeckHovered(false); setBoardHoveredCell(null); setConfirmTarget(null); setDiscardHovered(false)
+          setHandInsertIndex(null); insertRevealedRef.current = false
+          clearTimeout(hoverTrailingRef.current)
+          emit('select_card_type', { cardType: null, cardId: null })
+          emit('hover_discard', { hovering: false })
+          emit('hover_deck', { hovering: false })
+          // floatingPiece + returnSlide left intact — ReturnSlide.onDone clears them
+        }
+      } else {
+        // attackPending && s.reactionWindowOpen — keep piece locked at target during window
+        setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null)
+        setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
+        setDiscardHovered(false)
+      }
+
       setLocalHandOrder(null)
       setOppHandIds(null)
       setDiscardViewIndex(s.discardViewIndex ?? 0)
       setDiscardBrowserId(null)
+      setOppSelectedPiece(null)
+      setOppHoveredCell(null)
       if (!s.reactionWindowOpen) { setReactionWindowMode(null); setReversalTargetMode(null); setMyPendingAction(null) }
-      // Flash cells for opponent's resolved action
-      if (lastAction && lastAction.actorSide !== side && !s.reactionWindowOpen) {
-        const p = lastAction.payload
-        const cells = new Set()
-        if (p) {
-          if (p.row !== undefined && p.lane !== undefined) cells.add(`${p.row},${p.lane}`)
-          if (p.toRow !== undefined && p.toLane !== undefined) cells.add(`${p.toRow},${p.toLane}`)
-          if (p.targetRow !== undefined && p.targetLane !== undefined) cells.add(`${p.targetRow},${p.targetLane}`)
-          if (p.pieceRow !== undefined && p.pieceLane !== undefined) cells.add(`${p.pieceRow},${p.pieceLane}`)
-        }
-        if (cells.size > 0) {
-          setFlashCells(cells)
-          setTimeout(() => setFlashCells(null), 1500)
-        }
-      }
       if (lastAction?.reactionFired === 'intercept' && lastAction?.actorSide === side) {
         const p = lastAction.payload
         let msg = 'Your action was intercepted — you cannot repeat it this turn.'
@@ -103,27 +291,15 @@ export default function Game() {
         setErrorMsg('')
       }
     },
-    auto_end_turn_pending: ({ ms }) => {
-      if (autoPassEnabled && state?.currentTurn === side && myHand.length <= 5) {
-        emit('game_action', { type: 'end_turn', discardIndices: [] })
-        return
-      }
-      setAutoEnd({ startedAt: Date.now(), ms })
+    enslave_prompt: ({ validSpaces, pieceType }) => {
+      setEnslaveMode({ validSpaces, pieceType })
+      setFloatingPiece({ piece: { type: pieceType, owner: side, buff: null, debuff: null, canActThisTurn: false }, fromRow: -1, fromLane: -1 })
+      emit('select_card_type', { cardType: pieceType, cardId: null })
     },
-    enslave_prompt:        ({ validSpaces, pieceType }) => setEnslaveMode({ validSpaces, pieceType }),
     bodyguard_prompt:      ({ options, isKingAttack, targetType, targetRow, targetLane }) =>
                              setBodyguardMode({ options, isKingAttack, targetType, targetRow, targetLane }),
     reaction_window: ({ action, actorSide, ms }) => {
-      const isBuffDebuff = action.type === 'play_buff' || action.type === 'play_debuff'
-      const hasApplicable = myHand.some(c =>
-        c.type === 'Intercept' || (c.type === 'Reversal' && isBuffDebuff)
-      )
-      if (autoPassEnabled && !hasApplicable) {
-        emit('pass_reaction')
-        return
-      }
-      setReactionWindowMode({ action, actorSide, ms, startedAt: Date.now() })
-      setAutoEnd(null)
+      setReactionWindowMode({ action, actorSide, ms })
     },
     error: ({ message }) => {
       setErrorMsg(message)
@@ -133,15 +309,14 @@ export default function Game() {
   })
 
   function clearAll() {
-    setCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null); setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
-  }
-
-  function toggleAutoPass() {
-    setAutoPassEnabled(prev => {
-      const next = !prev
-      localStorage.setItem('checkline_autopass', String(next))
-      return next
-    })
+    setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null); setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
+    setFloatingPiece(null); setBoardHoveredCell(null); setConfirmTarget(null); setDiscardHovered(false)
+    setAttackPending(null); setReturnSlide(null); setDeckHovered(false); setHandInsertIndex(null)
+    insertRevealedRef.current = false
+    clearTimeout(hoverTrailingRef.current)
+    emit('select_card_type', { cardType: null, cardId: null })
+    emit('hover_discard', { hovering: false })
+    emit('hover_deck', { hovering: false })
   }
 
   function emitAction(payload, enriched = {}) {
@@ -238,9 +413,11 @@ export default function Game() {
   const reversalTargets = useMemo(() => {
     if (!reversalTargetMode || !state || !reactionWindowMode) return null
     const { action } = reactionWindowMode
+    const origKey = action.targetRow != null ? `${action.targetRow},${action.targetLane}` : null
     const s = new Set()
     for (let r = 0; r <= 3; r++) {
       for (let l = 0; l <= 4; l++) {
+        if (`${r},${l}` === origKey) continue
         const p = state.board[r][l]
         if (action.type === 'play_buff') {
           if (p && p.type !== 'King' && !p.buff && p.debuff?.type !== 'Silence') s.add(`${r},${l}`)
@@ -269,10 +446,26 @@ export default function Game() {
   const me          = state.players[side]
   const opponent    = state.players[1 - side]
   const myHand      = Array.isArray(me.hand) ? me.hand : []
-  const displayHand = localHandOrder ?? myHand
+  const filteredHand = (localHandOrder ?? myHand).filter(c => !liftedCard || c.id !== liftedCard.card.id)
+  const displayHand  = (handInsertIndex !== null && liftedCard !== null)
+    ? [
+        ...filteredHand.slice(0, handInsertIndex),
+        liftedCard.card,
+        ...filteredHand.slice(handInsertIndex),
+      ]
+    : filteredHand
   const oppHand     = opponent.hand  // { count, ids }
   const oppCount    = oppHand?.count ?? 0
-  const displayOppHand = oppHandIds ? { count: oppCount, ids: oppHandIds } : oppHand
+  // Use real IDs as keys from the start (server always provides them) to prevent
+  // the visual jump that occurs when generic 'opp-N' keys get replaced by real IDs
+  const baseOppIds  = Array.isArray(oppHand?.ids) ? oppHand.ids : null
+  const activeOppIds = oppHandIds ?? baseOppIds
+  const displayOppHand = {
+    count: oppCount - (oppSelectedCardType ? 1 : 0),
+    ids: activeOppIds
+      ? (oppLiftedCardId ? activeOppIds.filter(id => id !== oppLiftedCardId) : activeOppIds)
+      : null,
+  }
   const isMyTurn = state.currentTurn === side
   const inActions = state.turnPhase === 'actions'
   const inDiscard = state.turnPhase === 'discard'
@@ -286,9 +479,16 @@ export default function Game() {
     : null
 
   const amInCheck = state.inCheck?.[side] ?? false
-  const autoPassWarning = autoPassEnabled && myHand.some(c => c.type === 'Intercept' || c.type === 'Reversal')
-  const cycleCardIdx = selectedCardIdx !== null ? selectedCardIdx : (targetMode !== null ? targetMode.cardIdx : null)
-  const canCycleViaDiscard = isMyTurn && inActions && cycleCardIdx !== null && !reactionWindowMode && !enslaveMode && !bodyguardMode && state.actionsRemaining > 0
+  const canCycleViaDiscard  = isMyTurn && inActions && liftedCard !== null && !reactionWindowMode && !enslaveMode && !bodyguardMode && state.actionsRemaining > 0
+  const canShuffleIntoDeck  = isMyTurn && inActions && liftedCard !== null && !reactionWindowMode && !enslaveMode && !bodyguardMode
+  const actionsMax          = state.actionsMax ?? 2
+  const nextPlayer          = 1 - state.currentTurn
+  const myWillBeDisrupted   = state.disruptNextTurn && nextPlayer === side
+  const oppWillBeDisrupted  = state.disruptNextTurn && nextPlayer !== side
+  const canSacrifice = !!selectedPiece && isMyTurn && inActions && !reactionWindowMode && !enslaveMode && !bodyguardMode && selectedPieceType !== 'King'
+  const handFloatingCard = !floatingPiece && liftedCard !== null && handInsertIndex === null
+    ? { ...liftedCard.card, owner: side }
+    : null
 
   // Which hand cards glow as usable reactions during the reaction window
   const reactionIndices = reactionWindowMode ? (() => {
@@ -312,50 +512,63 @@ export default function Game() {
       setReactionWindowMode(null)
     } else if (card.type === 'Reversal' && isBuffDebuff && !reversalTargetMode) {
       setReversalTargetMode({ cardIdx: i })
-      emit('extend_reaction') // auto-extend once while picking a target
+      emit('reversal_placing') // freeze timer while picking a target
     }
   }
 
   function handleCycle() {
-    if (cycleCardIdx === null) return
-    emit('game_action', { type: 'cycle', cardIndex: cycleCardIdx })
-    clearAll()
+    if (!liftedCard) return
+    emit('game_action', { type: 'cycle', cardIndex: liftedCard.serverIdx })
+    setDiscardHovered(false)
+    emit('hover_discard', { hovering: false })
+    // Do NOT clearAll() — liftedCard stays set, keeping the cycled card absent from displayHand
+    // until state_update arrives (which calls clearAll via the !attackPending branch)
+  }
+
+  function handleShuffleIntoDeck() {
+    if (!liftedCard || !isMyTurn || !inActions) return
+    emit('game_action', { type: 'shuffle_into_deck', cardIndex: liftedCard.serverIdx })
+    setDeckHovered(false)
+    emit('hover_deck', { hovering: false })
+    // Don't clearAll() — state_update will handle it
   }
 
   function handleCardClick(i) {
-    if (!isMyTurn || !inActions) return
+    if (!isMyTurn || !inActions || attackPending) return
+    if (floatingPiece) { setFloatingPiece(null); emit('select_piece', null) }
 
     const card = displayHand[i]
+    if (!card) return
 
-    if (INSTANT.has(card.type) || card.type === 'Purge') {
-      // Select it first — board click confirms play, discard click cycles
-      setCard(selectedCardIdx === i ? null : i)
-      setPiece(null); setTargetMode(null)
+    // Lifted card hovered back into hand — clicking it confirms placement at handInsertIndex
+    if (liftedCard && card.id === liftedCard.card.id) {
+      const newOrder = [...displayHand]
+      setLocalHandOrder(newOrder)
+      emit('hand_reorder', { ids: newOrder.map(c => c.id) })
+      setLiftedCard(null)
+      // select_card_type was already cleared on enter — don't restore (card stays in hand for opponent)
+      insertRevealedRef.current = false
+      setHandInsertIndex(null)
+      setTargetMode(null)
       return
     }
 
-    if (PLACEABLE.has(card.type)) {
-      setCard(selectedCardIdx === i ? null : i)
-      setPiece(null); setTargetMode(null)
-      return
-    }
+    // Don't lift a new card while in insert mode
+    if (handInsertIndex !== null) return
+
+    const serverIdx = myHand.findIndex(c => c.id === card.id)
+    setLiftedCard({ card, serverIdx })
+    emit('select_card_type', { cardType: card.type, cardId: card.id })
+    setPiece(null)
 
     if (BUFF_TYPES.has(card.type) || DEBUFF_TYPES.has(card.type) || CONTROL_CARD_TYPES.has(card.type)) {
       const type = BUFF_TYPES.has(card.type) ? 'buff'
                  : DEBUFF_TYPES.has(card.type) ? 'debuff'
-                 : card.type.toLowerCase()   // 'reposition', 'swap', 'dispel', 'return'
-      // Toggle off if clicking the same card again
-      if (targetMode?.cardIdx === i && targetMode?.type === type) {
-        setTargetMode(null)
-      } else {
-        setTargetMode({ type, cardIdx: i, step: 1, firstPiece: null })
-        setCard(null); setPiece(null)
-      }
-      return
+                 : card.type.toLowerCase()
+      setTargetMode({ type, cardId: card.id, step: 1, firstPiece: null })
+    } else {
+      setTargetMode(null)
     }
-    // Intercept / Reversal: select for potential cycling
-    setCard(selectedCardIdx === i ? null : i)
-    setPiece(null); setTargetMode(null)
   }
 
   function handleSpaceClick(row, lane) {
@@ -386,6 +599,8 @@ export default function Game() {
       if (enslaveMode.validSpaces.some(s => s.row === row && s.lane === lane)) {
         emit('enslave_response', { row, lane })
         setEnslaveMode(null)
+        setFloatingPiece(null)
+        emit('select_card_type', { cardType: null, cardId: null })
       }
       return
     }
@@ -394,14 +609,14 @@ export default function Game() {
 
     // ── Target-mode handling (buff/debuff/control cards) ──
     if (targetMode) {
-      const { type, cardIdx, step, firstPiece } = targetMode
+      const { type, cardId, step, firstPiece } = targetMode
       const piece = state.board[row][lane]
-
-      const card = myHand[cardIdx]
+      const card = myHand.find(c => c.id === cardId)
+      const serverIdx = myHand.findIndex(c => c.id === cardId)
 
       if (type === 'buff') {
         if (piece?.owner === side && piece.type !== 'King' && !piece.buff && piece.debuff?.type !== 'Silence')
-          emitAction({ type: 'play_buff', cardIndex: cardIdx, targetRow: row, targetLane: lane },
+          emitAction({ type: 'play_buff', cardIndex: serverIdx, targetRow: row, targetLane: lane },
             { effectType: card?.type, targetType: piece?.type })
         clearAll()
         return
@@ -409,7 +624,7 @@ export default function Game() {
 
       if (type === 'debuff') {
         if (piece && piece.owner !== side && piece.type !== 'King' && !piece.debuff && piece.buff?.type !== 'Protection')
-          emitAction({ type: 'play_debuff', cardIndex: cardIdx, targetRow: row, targetLane: lane },
+          emitAction({ type: 'play_debuff', cardIndex: serverIdx, targetRow: row, targetLane: lane },
             { effectType: card?.type, targetType: piece?.type })
         clearAll()
         return
@@ -417,7 +632,7 @@ export default function Game() {
 
       if (type === 'return') {
         if (piece?.owner === side && piece.type !== 'King')
-          emitAction({ type: 'play_return', cardIndex: cardIdx, pieceRow: row, pieceLane: lane },
+          emitAction({ type: 'play_return', cardIndex: serverIdx, pieceRow: row, pieceLane: lane },
             { pieceType: piece?.type })
         clearAll()
         return
@@ -426,7 +641,7 @@ export default function Game() {
       if (type === 'dispel') {
         if (piece && (piece.buff || piece.debuff)) {
           const which = (piece.buff && piece.debuff) ? 'buff' : (piece.buff ? 'buff' : 'debuff')
-          emitAction({ type: 'play_dispel', cardIndex: cardIdx, targetRow: row, targetLane: lane, which },
+          emitAction({ type: 'play_dispel', cardIndex: serverIdx, targetRow: row, targetLane: lane, which },
             { targetType: piece?.type })
         }
         clearAll()
@@ -442,7 +657,7 @@ export default function Game() {
           const ownRows = side === 0 ? [0, 1] : [2, 3]
           if (!piece && ownRows.includes(row)) {
             const fp = state.board[firstPiece.row]?.[firstPiece.lane]
-            emitAction({ type: 'play_reposition', cardIndex: cardIdx, pieceRow: firstPiece.row, pieceLane: firstPiece.lane, toRow: row, toLane: lane },
+            emitAction({ type: 'play_reposition', cardIndex: serverIdx, pieceRow: firstPiece.row, pieceLane: firstPiece.lane, toRow: row, toLane: lane },
               { pieceType: fp?.type })
           }
           clearAll()
@@ -458,7 +673,7 @@ export default function Game() {
         } else {
           if (piece?.owner === side && piece.debuff?.type !== 'Pin' &&
               !(row === firstPiece.row && lane === firstPiece.lane))
-            emitAction({ type: 'play_swap', cardIndex: cardIdx, aRow: firstPiece.row, aLane: firstPiece.lane, bRow: row, bLane: lane })
+            emitAction({ type: 'play_swap', cardIndex: serverIdx, aRow: firstPiece.row, aLane: firstPiece.lane, bRow: row, bLane: lane })
           clearAll()
         }
         return
@@ -468,23 +683,21 @@ export default function Game() {
     // ── Normal piece / placement handling ──
     const piece = state.board[row][lane]
 
-    if (selectedCardIdx !== null) {
-      const card = displayHand[selectedCardIdx]
-      if (card) {
-        if (INSTANT.has(card.type)) {
-          const typeMap = { Command: 'play_command', Disrupt: 'play_disrupt' }
-          emitAction({ type: typeMap[card.type], cardIndex: selectedCardIdx })
-        } else if (card.type === 'Purge') {
-          emitAction({ type: 'play_purge', cardIndex: selectedCardIdx })
-        } else if (PLACEABLE.has(card.type)) {
-          if (!piece) {
-            const ownRows = side === 0 ? [0, 1] : [2, 3]
-            if (!ownRows.includes(row)) {
-              setErrorMsg('Can only place pieces on your own side.')
-              setTimeout(() => setErrorMsg(''), 3000)
-            } else {
-              emitAction({ type: 'place', cardIndex: selectedCardIdx, row, lane }, { pieceType: card.type })
-            }
+    if (liftedCard !== null) {
+      const card = liftedCard.card
+      if (INSTANT.has(card.type)) {
+        const typeMap = { Command: 'play_command', Disrupt: 'play_disrupt' }
+        emitAction({ type: typeMap[card.type], cardIndex: liftedCard.serverIdx })
+      } else if (card.type === 'Purge') {
+        emitAction({ type: 'play_purge', cardIndex: liftedCard.serverIdx })
+      } else if (PLACEABLE.has(card.type)) {
+        if (!piece) {
+          const ownRows = side === 0 ? [0, 1] : [2, 3]
+          if (!ownRows.includes(row)) {
+            setErrorMsg('Can only place pieces on your own side.')
+            setTimeout(() => setErrorMsg(''), 3000)
+          } else {
+            emitAction({ type: 'place', cardIndex: liftedCard.serverIdx, row, lane }, { pieceType: card.type })
           }
         }
       }
@@ -494,32 +707,49 @@ export default function Game() {
 
     if (selectedPiece) {
       const { row: fr, lane: fl } = selectedPiece
+      // Click origin → put piece back
+      if (row === fr && lane === fl) {
+        clearAll()
+        emit('select_piece', null)
+        return
+      }
       const movingPiece = state.board[fr]?.[fl]
       if (!piece) {
         if (!validMoves?.has(`${row},${lane}`)) {
           const ownRows = side === 0 ? [0, 1] : [2, 3]
           if (movingPiece && isPinned(movingPiece) && ownRows.includes(row)) setErrorMsg('Pinned pieces cannot move.')
           else setErrorMsg('Invalid move.')
-          setTimeout(() => setErrorMsg(''), 3000)
-          clearAll()
+          setIsShaking(true)
+          setTimeout(() => setIsShaking(false), 420)
         } else {
           emitAction({ type: 'direct_move', row: fr, lane: fl, toRow: row, toLane: lane },
             { pieceType: movingPiece?.type })
           clearAll()
+          setConfirmTarget({ row, lane })
+          setTimeout(() => setConfirmTarget(null), 300)
         }
       } else if (piece.owner === side) {
         setPiece({ row, lane })
+        setLiftedCard(null)
+        emit('select_card_type', { cardType: null, cardId: null })
+        setFloatingPiece({ piece, fromRow: row, fromLane: lane })
         emit('select_piece', { row, lane })
       } else {
         if (!validAttacks?.has(`${row},${lane}`)) {
           if (movingPiece && isFatigued(movingPiece)) setErrorMsg('Fatigued pieces cannot attack.')
           else setErrorMsg('Invalid attack.')
-          setTimeout(() => setErrorMsg(''), 3000)
-          clearAll()
+          setIsShaking(true)
+          setTimeout(() => setIsShaking(false), 420)
         } else {
           emitAction({ type: 'direct_attack', row: fr, lane: fl, targetRow: row, targetLane: lane },
             { pieceType: movingPiece?.type, targetType: piece?.type })
-          clearAll()
+          // Lock piece at target — don't clearAll; keep floatingPiece + boardHoveredCell
+          setAttackPending({ fromRow: fr, fromLane: fl, toRow: row, toLane: lane, piece: movingPiece })
+          setBoardHoveredCell({ row, lane })
+          setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null)
+          setDiscardHovered(false)
+          setConfirmTarget({ row, lane })
+          setTimeout(() => setConfirmTarget(null), 300)
         }
       }
       return
@@ -527,9 +757,37 @@ export default function Game() {
 
     if (piece?.owner === side && piece.canActThisTurn) {
       setPiece({ row, lane })
-      setCard(null)
+      setLiftedCard(null)
+      emit('select_card_type', { cardType: null, cardId: null })
+      setFloatingPiece({ piece, fromRow: row, fromLane: lane })
       emit('select_piece', { row, lane })
     }
+  }
+
+  // ── Board hover handlers ───────────────────────────────────────────
+  function handleSpaceMouseEnter(row, lane) {
+    if (!attackPending) setBoardHoveredCell({ row, lane })
+    if (errorMsg) setErrorMsg('')
+    if (isShaking) setIsShaking(false)
+    // Throttled hover_space emit (50ms) with trailing emit to capture final position
+    if (floatingPiece || liftedCard !== null) {
+      const now = Date.now()
+      if (now - hoverThrottleRef.current > 50) {
+        clearTimeout(hoverTrailingRef.current)
+        hoverThrottleRef.current = now
+        emit('hover_space', { row, lane })
+      } else {
+        clearTimeout(hoverTrailingRef.current)
+        hoverTrailingRef.current = setTimeout(() => {
+          hoverThrottleRef.current = Date.now()
+          emit('hover_space', { row, lane })
+        }, 60)
+      }
+    }
+  }
+
+  function handleBoardMouseLeave() {
+    if (!attackPending) setBoardHoveredCell(null)
   }
 
   function handleSacrifice() {
@@ -592,11 +850,17 @@ export default function Game() {
           </span>
         </div>
       )}
-      {!isGameOver && errorMsg && <div className="error-msg">{errorMsg}</div>}
       {!isGameOver && amInCheck && <div className="check-warning">Your King is in check!</div>}
 
-      <div className="opponent-area">
-        <div className="player-label">{opponent.name} — {oppCount} card{oppCount !== 1 ? 's' : ''}</div>
+      <div className="opponent-area" ref={oppHandAreaRef}>
+        <div className="player-label">
+          <span>{opponent.name} — {displayOppHand.count} card{displayOppHand.count !== 1 ? 's' : ''}</span>
+          <ActionDots
+            remaining={!isMyTurn ? (state.actionsRemaining ?? 0) : (oppWillBeDisrupted ? 1 : 2)}
+            total={!isMyTurn ? actionsMax : 2}
+            disrupted={isMyTurn && oppWillBeDisrupted}
+          />
+        </div>
         <Hand cards={displayOppHand} faceDown isOpponent />
       </div>
 
@@ -617,10 +881,25 @@ export default function Game() {
           Opponent is {richActionLabel(reactionWindowMode.action)}. React?
         </div>
       )}
-      {!isGameOver && myPendingAction && isMyTurn && (
-        <div className="reaction-window-banner" style={{ background: 'rgba(124,131,253,0.08)', borderColor: 'rgba(124,131,253,0.35)', color: '#a0b0ff' }}>
-          You are {richActionLabel(myPendingAction)}…
-        </div>
+
+      {captureSlides.map((slide, idx) => (
+        <CaptureSlide
+          key={idx}
+          piece={slide.piece}
+          fromPos={slide.fromPos}
+          toPos={slide.toPos}
+          isOwn={slide.isOwn}
+          onDone={() => setCaptureSlides(prev => prev.filter((_, i) => i !== idx))}
+        />
+      ))}
+      {returnSlide && (
+        <ReturnSlide
+          piece={returnSlide.piece}
+          fromPos={returnSlide.fromPos}
+          toPos={returnSlide.toPos}
+          isOwn={returnSlide.isOwn}
+          onDone={() => { setReturnSlide(null); setFloatingPiece(null) }}
+        />
       )}
 
       <div className="board-area">
@@ -632,39 +911,121 @@ export default function Game() {
           canCycle={canCycleViaDiscard}
           onBrowse={delta => emit('browse_discard', { delta })}
           onCycle={handleCycle}
+          pileRef={discardPileRef}
+          canSacrifice={canSacrifice}
+          discardHovered={discardHovered}
+          floatingPiece={floatingPiece}
+          onSacrificeHover={() => setDiscardHovered(true)}
+          onSacrificeLeave={() => setDiscardHovered(false)}
+          onSacrifice={handleSacrifice}
+          liftedCard={liftedCard}
+          cycleHovered={discardHovered && canCycleViaDiscard}
+          onCycleHover={() => { setDiscardHovered(true); emit('hover_discard', { hovering: true }) }}
+          onCycleLeave={() => { setDiscardHovered(false); emit('hover_discard', { hovering: false }) }}
+          oppDiscardHovered={oppDiscardHovered}
+          oppLiftedCardType={oppSelectedCardType}
         />
         <Board
           board={previewBoard ?? state.board}
           side={side}
           selectedPiece={selectedPiece}
-          placingCard={selectedCardIdx !== null}
+          placingCard={liftedCard !== null && PLACEABLE.has(liftedCard.card.type)}
           validMoves={validMoves}
           validAttacks={validAttacks}
           attackRange={attackRange}
           cardTargets={enslaveTargets ?? bodyguardTargets ?? reversalTargets ?? cardTargets}
           underAttack={bodyguardMode ? `${bodyguardMode.targetRow},${bodyguardMode.targetLane}` : null}
-          flashCells={flashCells}
           onSpaceClick={!isGameOver && (enslaveMode || bodyguardMode || reversalTargetMode || (isMyTurn && inActions)) ? handleSpaceClick : undefined}
+          spaceRefCallback={(r, l, el) => { boardSpaceRefs.current[`${r},${l}`] = el }}
+          onSpaceMouseEnter={handleSpaceMouseEnter}
+          onBoardMouseLeave={handleBoardMouseLeave}
+          floatingPiece={floatingPiece}
+          boardHoveredCell={boardHoveredCell}
+          handFloatingCard={handFloatingCard}
+          oppSelectedPiece={oppSelectedPiece}
+          oppHoveredCell={(oppDiscardHovered || oppDeckHovered) ? null : oppHoveredCell}
+          oppSelectedCardType={oppSelectedCardType}
+          confirmTarget={confirmTarget}
+          isShaking={isShaking}
+          errorTip={errorMsg}
         />
-        <DeckPile deckSize={state.deckSize ?? 0} />
+        <DeckPile
+          deckSize={state.deckSize ?? 0}
+          pileRef={deckPileRef}
+          deckHovered={deckHovered && canShuffleIntoDeck}
+          liftedCard={liftedCard}
+          onDeckHover={canShuffleIntoDeck ? () => { setDeckHovered(true); emit('hover_deck', { hovering: true }) } : undefined}
+          onDeckLeave={canShuffleIntoDeck ? () => { setDeckHovered(false); emit('hover_deck', { hovering: false }) } : undefined}
+          onDeckClick={canShuffleIntoDeck ? handleShuffleIntoDeck : undefined}
+          oppDeckHovered={oppDeckHovered}
+        />
       </div>
 
       <div className="my-area">
-        <Hand
-          cards={displayHand}
-          selectedIdx={selectedCardIdx}
-          selectedSet={targetMode ? new Set([targetMode.cardIdx]) : undefined}
-          interceptedIds={state.interceptedCardIds}
-          reactionIndices={reactionIndices}
-          onCardClick={reactionWindowMode ? handleReactionCardClick : (isMyTurn && inActions && !localHandOrder ? handleCardClick : undefined)}
-          onReorder={newCards => {
-            setLocalHandOrder(newCards)
-            emit('hand_drag', { ids: newCards.map(c => c.id) })
+        <div
+          ref={ownHandAreaRef}
+          onMouseEnter={(e) => {
+            setHandHovered(true)
+            emit('hand_hover_start')
+            if (liftedCard && isMyTurn && inActions) {
+              emit('hover_space', { row: null, lane: null })
+              setBoardHoveredCell(null)
+              const rect = ownHandAreaRef.current?.getBoundingClientRect()
+              if (rect) {
+                const relX = (e.clientX - rect.left) / rect.width
+                const newIdx = Math.min(filteredHand.length, Math.max(0, Math.round(relX * filteredHand.length)))
+                setHandInsertIndex(newIdx)
+                // Emit full order (liftedCard included) THEN clear select_card_type —
+                // opponent sees the card appear at the right slot without snapping
+                const newOrder = [...filteredHand.slice(0, newIdx), liftedCard.card, ...filteredHand.slice(newIdx)]
+                emit('hand_drag', { ids: newOrder.map(c => c.id) })
+                emit('select_card_type', { cardType: null, cardId: null })
+                insertRevealedRef.current = true
+              }
+            }
           }}
-          onDragEnd={finalCards => {
-            emit('hand_reorder', { ids: finalCards.map(c => c.id) })
+          onMouseLeave={() => {
+            setHandHovered(false)
+            emit('hand_hover_end')
+            if (insertRevealedRef.current) {
+              insertRevealedRef.current = false
+              if (liftedCard) {
+                // Card goes back to floating on board — restore original order and lifted state
+                emit('hand_drag', { ids: (localHandOrder ?? myHand).map(c => c.id) })
+                emit('select_card_type', { cardType: liftedCard.card.type, cardId: liftedCard.card.id })
+              }
+            }
+            setHandInsertIndex(null)
           }}
-        />
+          onMouseMove={liftedCard && isMyTurn && inActions ? (e) => {
+            const rect = ownHandAreaRef.current?.getBoundingClientRect()
+            if (rect) {
+              const relX = (e.clientX - rect.left) / rect.width
+              const newIdx = Math.min(filteredHand.length, Math.max(0, Math.round(relX * filteredHand.length)))
+              if (newIdx !== handInsertIndex) {
+                setHandInsertIndex(newIdx)
+                // Emit full order with liftedCard at new position — opponent sees real-time movement
+                const newOrder = [...filteredHand.slice(0, newIdx), liftedCard.card, ...filteredHand.slice(newIdx)]
+                emit('hand_drag', { ids: newOrder.map(c => c.id) })
+              }
+            }
+          } : undefined}
+        >
+          <Hand
+            cards={displayHand}
+            interceptedIds={state.interceptedCardIds}
+            reactionIndices={reactionIndices}
+            selectedIdx={handInsertIndex !== null ? handInsertIndex : undefined}
+            onCardClick={reactionWindowMode ? handleReactionCardClick : (isMyTurn && inActions && (!localHandOrder || handInsertIndex !== null) ? handleCardClick : undefined)}
+            onReorder={handInsertIndex === null ? (newCards => {
+              setLocalHandOrder(newCards)
+              emit('hand_drag', { ids: newCards.map(c => c.id) })
+            }) : undefined}
+            onDragEnd={handInsertIndex === null ? (finalCards => {
+              emit('hand_reorder', { ids: finalCards.map(c => c.id) })
+            }) : undefined}
+          />
+        </div>
         <div className="game-controls">
           {isGameOver ? (
             <>
@@ -681,19 +1042,6 @@ export default function Game() {
             </>
           ) : (
             <>
-              {/* Far left: auto-pass */}
-              <button
-                className={`btn-secondary auto-pass-toggle${autoPassWarning ? ' btn-warning' : ''}`}
-                onClick={toggleAutoPass}
-                title={autoPassEnabled
-                  ? autoPassWarning
-                    ? 'Auto-pass ON — you have reaction cards that will be skipped!'
-                    : 'Auto-pass ON — click to disable'
-                  : 'Auto-pass OFF — click to enable'}
-              >
-                Auto-pass {autoPassEnabled ? 'ON' : 'OFF'}
-              </button>
-
               {/* Context controls */}
               {reactionWindowMode ? (
                 <>
@@ -701,14 +1049,17 @@ export default function Game() {
                     ? <span className="waiting-turn">Click a target on the board for Reversal…</span>
                     : <span className="waiting-turn">Click a highlighted card to react, or pass.</span>
                   }
-                  <button className="btn-secondary" onClick={() => emit('extend_reaction')}>+10s</button>
                   <button className="btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>Pass</button>
                   <div className="auto-end-wrap" style={{ width: 'auto', minWidth: '80px' }}>
-                    <span className="auto-end-label">
-                      {Math.max(0, Math.ceil((reactionWindowMode.ms - (Date.now() - reactionWindowMode.startedAt)) / 1000))}s
-                    </span>
                     <div className="auto-end-track">
-                      <div className="auto-end-bar" style={{ animationDuration: `${reactionWindowMode.ms}ms` }} />
+                      <div
+                        className="auto-end-bar"
+                        style={{
+                          width: `${reactionPct}%`,
+                          animation: 'none',
+                          transition: 'none',
+                        }}
+                      />
                     </div>
                   </div>
                 </>
@@ -716,14 +1067,16 @@ export default function Game() {
                 <span className="waiting-turn">Opponent is considering a reaction…</span>
               ) : (
                 <>
-                  {isMyTurn && inActions && selectedCardIdx !== null && (INSTANT.has(displayHand[selectedCardIdx]?.type) || displayHand[selectedCardIdx]?.type === 'Purge') && (
-                    <span className="waiting-turn">Click anywhere on the board to play {displayHand[selectedCardIdx]?.type}</span>
-                  )}
-                  {!enslaveMode && !bodyguardMode && selectedPiece && selectedPieceType !== 'King' && isMyTurn && inActions && (
-                    <button className="btn-secondary" onClick={handleSacrifice}>Sacrifice</button>
+                  {isMyTurn && inActions && liftedCard !== null && (INSTANT.has(liftedCard.card.type) || liftedCard.card.type === 'Purge') && (
+                    <span className="waiting-turn">Click anywhere on the board to play {liftedCard.card.type}</span>
                   )}
                   {enslaveMode && (
-                    <button className="btn-secondary" onClick={() => { emit('enslave_response', { discard: true }); setEnslaveMode(null) }}>
+                    <button className="btn-secondary" onClick={() => {
+                      emit('enslave_response', { discard: true })
+                      setEnslaveMode(null)
+                      setFloatingPiece(null)
+                      emit('select_card_type', { cardType: null, cardId: null })
+                    }}>
                       Discard {enslaveMode.pieceType}
                     </button>
                   )}
@@ -743,6 +1096,15 @@ export default function Game() {
               {/* Spacer pushes end turn + forfeit to the right */}
               <div style={{ flex: 1 }} />
 
+              {/* Action circles */}
+              {!reactionWindowMode && !enslaveMode && !bodyguardMode && !isGameOver && (
+                <ActionDots
+                  remaining={isMyTurn ? (state.actionsRemaining ?? 0) : (myWillBeDisrupted ? 1 : 2)}
+                  total={isMyTurn ? actionsMax : 2}
+                  disrupted={!isMyTurn && myWillBeDisrupted}
+                />
+              )}
+
               {!reactionWindowMode && !enslaveMode && !bodyguardMode && isMyTurn && inActions && (
                 <button onClick={handleEndTurn}>End Turn</button>
               )}
@@ -752,18 +1114,15 @@ export default function Game() {
         {!isGameOver && (
           <button className="btn-secondary forfeit-btn" onClick={() => setForfeitConfirm(true)}>Forfeit</button>
         )}
-        {autoEnd && (
-          <div className="auto-end-wrap">
-            <span className="auto-end-label">Turn ending…</span>
-            <div className="auto-end-track">
-              <div
-                className="auto-end-bar"
-                style={{ animationDuration: `${autoEnd.ms}ms` }}
-              />
-            </div>
-          </div>
-        )}
       </div>
+
+      {deckSlide && (
+        <DeckSlide
+          fromPos={deckSlide.fromPos}
+          toPos={deckSlide.toPos}
+          onDone={() => setDeckSlide(null)}
+        />
+      )}
     </div>
   )
 }
@@ -851,6 +1210,21 @@ function computePreviewBoard(board, action, actorSide) {
     default: return null
   }
   return b
+}
+
+// ── Action dots ────────────────────────────────────────────────────────────────
+
+function ActionDots({ remaining, total, disrupted = false }) {
+  return (
+    <div className="action-dots">
+      {Array.from({ length: total }).map((_, i) => {
+        const cls = (disrupted && i === total - 1)
+          ? 'dot-disrupted'
+          : i < remaining ? 'dot-filled' : 'dot-empty'
+        return <span key={i} className={`action-dot ${cls}`} title={disrupted && i === total - 1 ? 'Disrupted next turn' : undefined} />
+      })}
+    </div>
+  )
 }
 
 // ── Mulligan ───────────────────────────────────────────────────────────────────

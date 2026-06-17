@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+const SYMBOLS = { King: '♚', Queen: '♛', Rook: '♜', Bishop: '♝', Knight: '♞', Pawn: '♟' }
+
 const CATEGORY = {
   Pawn: 'piece', Knight: 'piece', Bishop: 'piece',
   Rook: 'piece', Queen: 'piece', King: 'piece',
@@ -10,7 +12,17 @@ const CATEGORY = {
   Intercept: 'reaction', Reversal: 'reaction'
 }
 
-export default function DiscardPile({ discardPile = [], viewIndex = 0, browserId = null, mySide, canCycle = false, onBrowse, onCycle }) {
+export default function DiscardPile({
+  discardPile = [], viewIndex = 0, browserId = null, mySide,
+  canCycle = false, onBrowse, onCycle, pileRef: externalRef,
+  // Sacrifice hover
+  canSacrifice = false, discardHovered = false, floatingPiece = null,
+  onSacrificeHover, onSacrificeLeave, onSacrifice,
+  // Cycle hover
+  liftedCard = null, cycleHovered = false, onCycleHover, onCycleLeave,
+  // Opponent hover
+  oppDiscardHovered = false, oppLiftedCardType = null,
+}) {
   const pileRef = useRef(null)
   const throttleRef = useRef(null)
   const count = discardPile.length
@@ -32,11 +44,23 @@ export default function DiscardPile({ discardPile = [], viewIndex = 0, browserId
     return () => el.removeEventListener('wheel', handleWheel)
   }, [onBrowse, count])
 
+  function handleClick() {
+    if (canSacrifice && discardHovered && onSacrifice) { onSacrifice(); return }
+    if (canCycle && onCycle) onCycle()
+  }
+
   return (
     <div
-      ref={pileRef}
-      className={`pile-area${canCycle ? ' can-cycle' : ''}${opponentBrowsing ? ' opponent-browsing' : ''}`}
-      onClick={canCycle && onCycle ? onCycle : undefined}
+      ref={el => { pileRef.current = el; if (externalRef) externalRef.current = el }}
+      className={[
+        'pile-area',
+        canCycle ? 'can-cycle' : '',
+        canSacrifice && discardHovered ? 'sacrifice-hover' : '',
+        opponentBrowsing ? 'opponent-browsing' : '',
+      ].filter(Boolean).join(' ')}
+      onClick={handleClick}
+      onMouseEnter={canSacrifice ? onSacrificeHover : canCycle ? onCycleHover : undefined}
+      onMouseLeave={canSacrifice ? onSacrificeLeave : canCycle ? onCycleLeave : undefined}
     >
       <span className="pile-label">
         Discard ({count}){opponentBrowsing ? ' — browsing' : ''}
@@ -58,9 +82,36 @@ export default function DiscardPile({ discardPile = [], viewIndex = 0, browserId
           </>
         )}
       </div>
-      {canCycle
-        ? <span className="pile-cycle-hint">Cycle? (1 action)</span>
-        : count > 1 && <span className="pile-scroll-hint">Scroll to browse</span>
+
+      {/* Floating card preview when hovering with a lifted card for cycle */}
+      {canCycle && cycleHovered && liftedCard && (
+        <div className="pile-floating-preview">
+          <span className="card-name">{liftedCard.card.type}</span>
+        </div>
+      )}
+
+      {/* Floating piece preview when hovering with a selected piece for sacrifice */}
+      {canSacrifice && discardHovered && floatingPiece && (
+        <div className={`pile-floating-preview${floatingPiece.piece.owner === mySide ? '' : ' enemy'}`}>
+          <span className="piece-symbol">{SYMBOLS[floatingPiece.piece.type] ?? floatingPiece.piece.type?.[0]}</span>
+          <span className="piece-label">{floatingPiece.piece.type}</span>
+        </div>
+      )}
+
+      {/* Card preview when opponent is hovering their card over discard pile */}
+      {oppDiscardHovered && !canSacrifice && !canCycle && (
+        oppLiftedCardType
+          ? <div className="pile-floating-preview">
+              <span className="card-name">{oppLiftedCardType}</span>
+            </div>
+          : <div className="pile-floating-preview pile-floating-facedown" />
+      )}
+
+      {canSacrifice
+        ? <span className="pile-cycle-hint" style={{ color: 'rgba(239,83,80,0.85)' }}>Sacrifice? (1 action)</span>
+        : canCycle
+          ? <span className="pile-cycle-hint">Cycle? (1 action)</span>
+          : count > 1 && <span className="pile-scroll-hint">Scroll to browse</span>
       }
     </div>
   )

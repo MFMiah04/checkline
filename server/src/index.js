@@ -29,11 +29,9 @@ const io = new Server(httpServer, {
 const PORT = process.env.PORT || 3001
 
 const disconnectTimers  = new Map()
-const autoEndTimers     = new Map()
 const enslaveTimers     = new Map()
 const bodyguardTimers   = new Map()
 const reactionTimers     = new Map()
-const AUTO_END_MS       = 5000
 
 // Cleanly remove a socket from whatever room it's currently in.
 // Used before create/join to prevent ghost slots when navigating between rooms.
@@ -53,40 +51,6 @@ function leaveCurrentRoom(socket) {
   socket.leave(room.code)
 }
 
-function clearAutoEndTurn(code) {
-  if (autoEndTimers.has(code)) {
-    clearTimeout(autoEndTimers.get(code))
-    autoEndTimers.delete(code)
-  }
-}
-
-function scheduleAutoEndTurn(room) {
-  const { code } = room
-  clearAutoEndTurn(code)
-  io.to(code).emit('auto_end_turn_pending', { ms: AUTO_END_MS })
-  const timer = setTimeout(() => {
-    autoEndTimers.delete(code)
-    const currentRoom = getRoom(code)
-    if (!currentRoom || currentRoom.phase !== 'playing') return
-    if (currentRoom.turnPhase !== 'actions' || currentRoom.actionsRemaining > 0) return
-    const player = currentRoom.players[currentRoom.currentTurn]
-    if (player.hand.length > 5) {
-      // Must discard before flipping turn — enter discard phase
-      currentRoom.turnPhase = 'discard'
-      emitStateUpdate(currentRoom)
-    } else {
-      const result = applyEndTurn(currentRoom, player, { discardIndices: [] })
-      if (!result.error) {
-        emitStateUpdate(currentRoom, result.lastAction)
-        if (result.gameOver) {
-          io.to(code).emit('game_over', { winner: currentRoom.winner })
-        }
-      }
-    }
-  }, AUTO_END_MS)
-  autoEndTimers.set(code, timer)
-}
-
 // Emit the current projected state to both players in a room.
 function emitStateUpdate(room, lastAction = null) {
   room.players.forEach((p, i) => {
@@ -94,7 +58,7 @@ function emitStateUpdate(room, lastAction = null) {
   })
 }
 
-// Check if auto-end or immediate checkmate applies after an action resolves.
+// Check if immediate checkmate applies after an action resolves; auto-end turn if 0 actions remain.
 function checkAndScheduleAutoEnd(room) {
   if (room.actionsRemaining === 0 && room.turnPhase === 'actions') {
     const king = findKing(room.board, room.currentTurn)
@@ -108,7 +72,21 @@ function checkAndScheduleAutoEnd(room) {
         return
       }
     }
-    scheduleAutoEndTurn(room)
+    // Auto-end turn instantly
+    const currentPlayer = room.players[room.currentTurn]
+    if (currentPlayer.hand.length > 5) {
+      // Client must discard first — transition to discard phase
+      room.turnPhase = 'discard'
+      emitStateUpdate(room)
+    } else {
+      const endResult = applyEndTurn(room, currentPlayer, { discardIndices: [] })
+      if (!endResult.error) {
+        emitStateUpdate(room, endResult.lastAction)
+        if (endResult.gameOver) {
+          io.to(room.code).emit('game_over', { winner: room.winner })
+        }
+      }
+    }
   }
 }
 
@@ -129,6 +107,9 @@ function executePendingAction(room, reactionFired = null) {
   room.pendingAction = null
   room.reactionWindowOpen = false
   room.reactionWindowExpiresAt = null
+  room.reactionPaused = false
+  room.reactionRemainingMs = null
+  room.reactionFrozen = false
 
   const player = room.players[actorSide]
   let actionResult
@@ -147,6 +128,7 @@ function executePendingAction(room, reactionFired = null) {
     case 'play_purge':       actionResult = applyPurge(room, player, action);           break
     case 'play_command':
       room.actionsRemaining += 1
+      room.actionsMax = (room.actionsMax ?? 2) + 1
       actionResult = { lastAction: mkLastAction('play_command', actorSide, action) }
       break
     case 'play_disrupt':
@@ -467,6 +449,30 @@ io.on('connection', socket => {
     if (opponent) io.to(opponent.socketId).emit('opponent_hover_card', { index })
   })
 
+  socket.on('select_card_type', ({ cardType, cardId }) => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    const opponent = room.players.find(p => p.side !== player.side)
+    if (opponent?.socketId) io.to(opponent.socketId).emit('opponent_select_card_type', { cardType: cardType ?? null, cardId: cardId ?? null })
+  })
+
+  socket.on('hover_discard', ({ hovering }) => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    const opponent = room.players.find(p => p.side !== player.side)
+    if (opponent?.socketId) io.to(opponent.socketId).emit('opponent_hover_discard', { hovering })
+  })
+
+  socket.on('hover_deck', ({ hovering }) => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    const opponent = room.players.find(p => p.side !== player.side)
+    if (opponent?.socketId) io.to(opponent.socketId).emit('opponent_hover_deck', { hovering })
+  })
+
   socket.on('hover_space', payload => {
     const result = getRoomBySocket(socket.id)
     if (!result) return
@@ -500,12 +506,22 @@ io.on('connection', socket => {
     if (room.turnPhase === 'discard' && payload.type !== 'end_turn')
       return socket.emit('error', { message: 'Discard down to 5 cards first.' })
 
-    clearAutoEndTurn(room.code)
-
     // Free actions (Command/Disrupt) are playable even at 0 actions remaining
     const isFreeAction = payload.type === 'play_command' || payload.type === 'play_disrupt'
     if (!isFreeAction && payload.type !== 'end_turn' && room.actionsRemaining <= 0)
       return socket.emit('error', { message: 'No actions remaining.' })
+
+    // ── Shuffle into deck: free action, not interceptable ──
+    if (payload.type === 'shuffle_into_deck') {
+      const { cardIndex } = payload
+      if (!Number.isInteger(cardIndex) || cardIndex < 0 || cardIndex >= player.hand.length)
+        return socket.emit('error', { message: 'Invalid card index.' })
+      const [card] = player.hand.splice(cardIndex, 1)
+      const pos = Math.floor(Math.random() * (room.deck.length + 1))
+      room.deck.splice(pos, 0, card)
+      emitStateUpdate(room, { type: 'shuffle_into_deck', actorSide: player.side, payload: {} })
+      return
+    }
 
     // ── Cycle: not interceptable — execute immediately ──
     if (payload.type === 'cycle') {
@@ -644,14 +660,25 @@ io.on('connection', socket => {
       return
     }
 
-    // ── Open reaction window ──
-    room.reactionWindowOpen = true
-    room.reactionWindowExpiresAt = Date.now() + 3000
+    // ── Only open reaction window if defender has cursor on hand ──
+    const defenderSide = 1 - player.side
+    const defender = room.players[defenderSide]
 
-    const opponentSide = 1 - player.side
-    const opponentSocket = room.players[opponentSide]?.socketId
+    if (!defender || !defender.handHovered) {
+      // Defender not hovering hand — resolve immediately
+      executePendingAction(room)
+      return
+    }
+
+    // ── Open reaction window (defender's cursor is on hand) ──
+    const WINDOW_MS = 15000
+    room.reactionWindowOpen = true
+    room.reactionWindowExpiresAt = Date.now() + WINDOW_MS
+    room.reactionFrozen = false
+
+    const opponentSocket = defender.socketId
     if (opponentSocket) {
-      io.to(opponentSocket).emit('reaction_window', { action: enrichedAction, actorSide: player.side, ms: 3000 })
+      io.to(opponentSocket).emit('reaction_window', { action: enrichedAction, actorSide: player.side, ms: WINDOW_MS })
     }
 
     // Emit state to both (shows pre-applied Command/Disrupt card removal if applicable)
@@ -662,7 +689,7 @@ io.on('connection', socket => {
       const currentRoom = getRoom(room.code)
       if (!currentRoom || !currentRoom.reactionWindowOpen) return
       executePendingAction(currentRoom)
-    }, 3000)
+    }, WINDOW_MS)
     reactionTimers.set(room.code, timer)
   })
 
@@ -702,6 +729,7 @@ io.on('connection', socket => {
     clearReactionTimer(room.code)
     room.reactionWindowOpen = false
     room.reactionWindowExpiresAt = null
+    room.reactionFrozen = false
 
     const { action, actorSide } = room.pendingAction
     room.pendingAction = null
@@ -756,29 +784,63 @@ io.on('connection', socket => {
     executePendingAction(room)
   })
 
-  // ── Extend reaction ────────────────────────────────────────────────
-  socket.on('extend_reaction', () => {
+  // ── Hand hover start (defender moves cursor onto hand) ────────────
+  socket.on('hand_hover_start', () => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    player.handHovered = true
+    if (!room.reactionWindowOpen || !room.pendingAction) return
+    if (player.side === room.pendingAction.actorSide) return  // only defender
+    if (room.reactionFrozen) return
+
+    // Switch from 4× drain back to 1× drain: multiply remaining by 4
+    const remaining = Math.max(0, room.reactionWindowExpiresAt - Date.now())
+    clearReactionTimer(room.code)
+    const newRemaining = Math.min(15000, remaining * 4)
+    room.reactionWindowExpiresAt = Date.now() + newRemaining
+    const timer = setTimeout(() => {
+      reactionTimers.delete(room.code)
+      const r = getRoom(room.code)
+      if (!r || !r.reactionWindowOpen) return
+      executePendingAction(r)
+    }, newRemaining)
+    reactionTimers.set(room.code, timer)
+  })
+
+  // ── Hand hover end (defender moves cursor off hand) ────────────────
+  socket.on('hand_hover_end', () => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    player.handHovered = false
+    if (!room.reactionWindowOpen || !room.pendingAction) return
+    if (player.side === room.pendingAction.actorSide) return
+    if (room.reactionFrozen) return
+
+    // Switch from 1× to 4× drain: divide remaining by 4
+    const remaining = Math.max(0, room.reactionWindowExpiresAt - Date.now())
+    clearReactionTimer(room.code)
+    const newRemaining = Math.max(500, Math.ceil(remaining / 4))
+    room.reactionWindowExpiresAt = Date.now() + newRemaining
+    const timer = setTimeout(() => {
+      reactionTimers.delete(room.code)
+      const r = getRoom(room.code)
+      if (!r || !r.reactionWindowOpen) return
+      executePendingAction(r)
+    }, newRemaining)
+    reactionTimers.set(room.code, timer)
+  })
+
+  // ── Reversal placing (defender selected Reversal, picking target — freeze timer) ──
+  socket.on('reversal_placing', () => {
     const result = getRoomBySocket(socket.id)
     if (!result) return
     const { room, player } = result
     if (!room.reactionWindowOpen || !room.pendingAction) return
-    if (player.side === room.pendingAction.actorSide) return // only opponent can extend
-
+    if (player.side === room.pendingAction.actorSide) return
     clearReactionTimer(room.code)
-    const extendBy = 10000
-    room.reactionWindowExpiresAt = Date.now() + extendBy
-
-    const timer = setTimeout(() => {
-      reactionTimers.delete(room.code)
-      const currentRoom = getRoom(room.code)
-      if (!currentRoom || !currentRoom.reactionWindowOpen) return
-      executePendingAction(currentRoom)
-    }, extendBy)
-    reactionTimers.set(room.code, timer)
-
-    // Re-emit reaction_window to this player with updated ms
-    const enriched = room.pendingAction.enrichedAction ?? room.pendingAction.action
-    socket.emit('reaction_window', { action: enriched, actorSide: room.pendingAction.actorSide, ms: extendBy })
+    room.reactionFrozen = true
   })
 
   // ── Enslave response ───────────────────────────────────────────────
