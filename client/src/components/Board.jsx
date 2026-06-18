@@ -3,7 +3,7 @@ import BoardSpace from './BoardSpace'
 const PIECE_TYPES = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
 
 export default function Board({
-  board, side, selectedPiece, placingCard,
+  board, side, isMyTurn, selectedPiece, placingCard,
   validMoves, validAttacks, attackRange, cardTargets,
   underAttack, onSpaceClick,
   // Floating piece props
@@ -81,6 +81,7 @@ export default function Board({
                 row={rowIdx}
                 lane={laneIdx}
                 side={side}
+                isMyTurn={isMyTurn}
                 isSelected={selectedPiece?.row === rowIdx && selectedPiece?.lane === laneIdx}
                 placingCard={placingCard}
                 isValidMove={validMoves?.has(cellKey) ?? false}

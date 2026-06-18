@@ -515,7 +515,7 @@ button:disabled {
   transition: opacity 0s;
 }
 
-.piece:hover .piece-hover-tooltip {
+.board-space:hover .piece-hover-tooltip {
   opacity: 1;
   transition: opacity 0.15s 1s;
 }

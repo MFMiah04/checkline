@@ -941,6 +941,7 @@ export default function Game() {
         <Board
           board={previewBoard ?? state.board}
           side={side}
+          isMyTurn={isMyTurn}
           selectedPiece={selectedPiece}
           placingCard={liftedCard !== null && PLACEABLE.has(liftedCard.card.type)}
           validMoves={validMoves}

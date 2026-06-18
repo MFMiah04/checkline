@@ -21,7 +21,7 @@ const TOKEN_TIPS = {
 }
 
 export default function BoardSpace({
-  piece, row, lane, side,
+  piece, row, lane, side, isMyTurn,
   isSelected, placingCard, isValidMove, isValidAttack, isAttackRange,
   isCardTarget, isUnderAttack, onClick,
   // Floating piece / animation props
@@ -32,7 +32,7 @@ export default function BoardSpace({
 }) {
   const isOwnSide  = side === 0 ? row <= 1 : row >= 2
   const isOwnPiece = piece?.owner === side
-  const cantAct    = isOwnPiece && !piece.canActThisTurn
+  const cantAct    = isOwnPiece && !piece.canActThisTurn && isMyTurn
 
   let cls = 'board-space'
   if (isOwnSide)        cls += ' own-side'
@@ -62,20 +62,22 @@ export default function BoardSpace({
         <span className="piece-intercepted-label">Intercepted</span>
       )}
       {renderPiece && (
-        <div className={`piece${isOwnPiece ? '' : ' enemy'}${cantAct ? ' cant-act' : ''}`}>
-          <span className="piece-symbol">{SYMBOLS[piece.type] ?? piece.type[0]}</span>
-          <span className="piece-label">{piece.type}</span>
-          <div className="piece-tokens">
-            {piece.buff   && <span className="piece-buff"   title={piece.buff.type}>{piece.buff.type.slice(0, 3)}</span>}
-            {piece.debuff && <span className="piece-debuff" title={piece.debuff.type}>{piece.debuff.type.slice(0, 3)}</span>}
+        <>
+          <div className={`piece${isOwnPiece ? '' : ' enemy'}${cantAct ? ' cant-act' : ''}`}>
+            <span className="piece-symbol">{SYMBOLS[piece.type] ?? piece.type[0]}</span>
+            <span className="piece-label">{piece.type}</span>
+            <div className="piece-tokens">
+              {piece.buff   && <span className="piece-buff"   title={piece.buff.type}>{piece.buff.type.slice(0, 3)}</span>}
+              {piece.debuff && <span className="piece-debuff" title={piece.debuff.type}>{piece.debuff.type.slice(0, 3)}</span>}
+            </div>
           </div>
-          <div className="piece-hover-tooltip">
+          <div className={`piece-hover-tooltip${cantAct ? ' pht-trigger-cant-act' : ' pht-trigger-piece'}`}>
             <div className="pht-title">{piece.type}</div>
             {PIECE_TIPS[piece.type] && <div className="pht-desc">{PIECE_TIPS[piece.type]}</div>}
             {piece.buff && <div className="pht-buff">{piece.buff.type}: {TOKEN_TIPS[piece.buff.type]}</div>}
             {piece.debuff && <div className="pht-debuff">{piece.debuff.type}: {TOKEN_TIPS[piece.debuff.type]}</div>}
           </div>
-        </div>
+        </>
       )}
 
       {/* Floating piece / card hovering above this cell */}
