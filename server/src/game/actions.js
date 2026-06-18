@@ -141,7 +141,6 @@ export function applyDirectAttack(room, player, { row, lane, targetRow, targetLa
     if (validSpaces.length > 0) {
       room.pendingEnslaved = { piece: captured, validSpaces, attackerRow: row, attackerLane: lane }
       room.enslavePromptOpen = true
-      room.enslaveExpiresAt = Date.now() + 15000
       return { lastAction: { ...la, secondaryEffect: 'enslave_placed' }, enslavePrompt: true, validSpaces, pieceType: captured.type }
     } else {
       room.discardPile.unshift({ type: captured.type, id: captured.id })
@@ -457,7 +456,6 @@ export function resolveCapture(room, attackerRow, attackerLane, targetRow, targe
     if (validSpaces.length > 0) {
       room.pendingEnslaved = { piece: captured, validSpaces, attackerRow, attackerLane }
       room.enslavePromptOpen = true
-      room.enslaveExpiresAt = Date.now() + 15000
       return { lastAction: { ...la, secondaryEffect: 'enslave_placed' }, enslavePrompt: true, validSpaces, pieceType: captured.type }
     } else {
       room.discardPile.unshift({ type: captured.type, id: captured.id })

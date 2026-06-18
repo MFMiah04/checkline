@@ -80,6 +80,7 @@ export default function Game() {
   // null | number — where to insert the lifted card when hovering back over hand
 
   const [reactionPct, setReactionPct] = useState(100)
+  const [turnFlash, setTurnFlash] = useState(false)
 
   // ── Refs ───────────────────────────────────────────────────────────
   const boardSpaceRefs    = useRef({})  // 'row,lane' → DOM el
@@ -92,6 +93,7 @@ export default function Game() {
   const reactionTimerRef  = useRef(null)
   // Tracks whether we cleared select_card_type for insert mode (so we can restore on leave)
   const insertRevealedRef = useRef(false)
+  const prevTurnRef       = useRef(null)
 
   const side = parseInt(localStorage.getItem('checkline_side') ?? '0')
 
@@ -221,6 +223,13 @@ export default function Game() {
 
       setState(s)
 
+      // Flash turn indicator when turn changes
+      if (prevTurnRef.current !== null && prevTurnRef.current !== s.currentTurn) {
+        setTurnFlash(true)
+        setTimeout(() => setTurnFlash(false), 1200)
+      }
+      prevTurnRef.current = s.currentTurn
+
       if (attackPending && !s.reactionWindowOpen) {
         // Attack resolved — trigger ReturnSlide (piece moves from target back to origin)
         const toEl  = boardSpaceRefs.current[`${attackPending.toRow},${attackPending.toLane}`]
@@ -300,6 +309,10 @@ export default function Game() {
                              setBodyguardMode({ options, isKingAttack, targetType, targetRow, targetLane }),
     reaction_window: ({ action, actorSide, ms }) => {
       setReactionWindowMode({ action, actorSide, ms })
+    },
+    reversal_cancelled: ({ ms }) => {
+      // Timer restarted after cancelling reversal target selection — update countdown
+      setReactionWindowMode(prev => prev ? { ...prev, ms } : prev)
     },
     error: ({ message }) => {
       setErrorMsg(message)
@@ -837,7 +850,7 @@ export default function Game() {
           </div>
         </div>
       )}
-      <GameInfo state={state} side={side} />
+      <GameInfo state={state} side={side} turnFlash={turnFlash} />
       {isGameOver && (
         <div className="game-over-banner">
           <span className={iWon ? 'game-over-win' : 'game-over-lose'}>
@@ -1049,8 +1062,14 @@ export default function Game() {
                     ? <span className="waiting-turn">Click a target on the board for Reversal…</span>
                     : <span className="waiting-turn">Click a highlighted card to react, or pass.</span>
                   }
-                  <button className="btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>Pass</button>
-                  <div className="auto-end-wrap" style={{ width: 'auto', minWidth: '80px' }}>
+                  {reversalTargetMode
+                    ? <button className="btn-secondary" onClick={() => {
+                        setReversalTargetMode(null)
+                        emit('reversal_cancel')
+                      }}>Cancel Reversal</button>
+                    : <button className="btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>Pass</button>
+                  }
+                  {!reversalTargetMode && <div className="auto-end-wrap" style={{ width: 'auto', minWidth: '80px' }}>
                     <div className="auto-end-track">
                       <div
                         className="auto-end-bar"
@@ -1061,7 +1080,7 @@ export default function Game() {
                         }}
                       />
                     </div>
-                  </div>
+                  </div>}
                 </>
               ) : state?.reactionWindowOpen && isMyTurn ? (
                 <span className="waiting-turn">Opponent is considering a reaction…</span>

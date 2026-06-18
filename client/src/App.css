@@ -214,12 +214,68 @@ button:disabled {
   background: #16213e;
   border: 1px solid #2a3a5c;
   border-radius: 8px;
-  padding: 0.6rem 1rem;
+  padding: 0.5rem 1rem;
   font-size: 0.9rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.game-info.my-turn {
+  border-color: #7c83fd;
+  box-shadow: 0 0 0 1px #7c83fd44;
+}
+
+.game-info.opp-turn {
+  border-color: #2a3a5c;
+}
+
+@keyframes turn-flash-anim {
+  0%   { box-shadow: 0 0 0 2px #7c83fdcc; }
+  60%  { box-shadow: 0 0 0 6px #7c83fd44; }
+  100% { box-shadow: 0 0 0 1px #7c83fd44; }
+}
+
+.game-info.turn-flash {
+  animation: turn-flash-anim 1.2s ease-out forwards;
 }
 
 .turn-indicator {
   flex: 1;
+}
+
+.turn-label {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-size: 1rem;
+}
+
+.turn-label-mine {
+  color: #7c83fd;
+}
+
+.turn-label-opp {
+  color: #888;
+}
+
+.turn-players {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.turn-player-active {
+  color: #ccc;
+  font-weight: 600;
+}
+
+.turn-player-waiting {
+  color: #555;
+}
+
+.turn-vs {
+  color: #444;
+  font-size: 0.7rem;
 }
 
 .actions-remaining {
@@ -399,6 +455,7 @@ button:disabled {
   align-items: center;
   gap: 1px;
   color: #c8d8ff;
+  position: relative;
 }
 
 .piece.enemy {
@@ -435,6 +492,52 @@ button:disabled {
 .piece-debuff {
   color: #e57373;
   font-weight: bold;
+}
+
+/* ── Board piece hover tooltip ───────────────────────────────────── */
+
+.piece-hover-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0d1b33;
+  border: 1px solid #3a4a6c;
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: normal;
+  width: 170px;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0s;
+}
+
+.piece:hover .piece-hover-tooltip {
+  opacity: 1;
+  transition: opacity 0.15s 1s;
+}
+
+.pht-title {
+  font-weight: 700;
+  color: #c8d8ff;
+  margin-bottom: 0.2rem;
+}
+
+.pht-desc {
+  color: #9aabcc;
+}
+
+.pht-buff {
+  color: #81c784;
+  margin-top: 0.25rem;
+}
+
+.pht-debuff {
+  color: #e57373;
+  margin-top: 0.25rem;
 }
 
 /* ── Hand ────────────────────────────────────────────────────────── */

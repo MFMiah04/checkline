@@ -199,19 +199,6 @@ function executePendingAction(room, reactionFired = null) {
           if (attackerSocket) {
             io.to(attackerSocket).emit('enslave_prompt', { validSpaces: captureResult.validSpaces, pieceType: captureResult.pieceType })
           }
-          const enslaveTimer = setTimeout(() => {
-            enslaveTimers.delete(currentRoom.code)
-            const r2 = getRoom(currentRoom.code)
-            if (!r2 || !r2.enslavePromptOpen) return
-            const { piece } = r2.pendingEnslaved
-            r2.discardPile.unshift({ type: piece.type, id: piece.id })
-            r2.pendingEnslaved = null
-            r2.enslavePromptOpen = false
-            r2.enslaveExpiresAt = null
-            emitStateUpdate(r2)
-            checkAndScheduleAutoEnd(r2)
-          }, 15000)
-          enslaveTimers.set(currentRoom.code, enslaveTimer)
         } else {
           checkAndScheduleAutoEnd(currentRoom)
         }
@@ -223,19 +210,6 @@ function executePendingAction(room, reactionFired = null) {
 
   if (actionResult.enslavePrompt) {
     io.to(player.socketId).emit('enslave_prompt', { validSpaces: actionResult.validSpaces, pieceType: actionResult.pieceType })
-    const enslaveTimer = setTimeout(() => {
-      enslaveTimers.delete(room.code)
-      const currentRoom = getRoom(room.code)
-      if (!currentRoom || !currentRoom.enslavePromptOpen) return
-      const { piece } = currentRoom.pendingEnslaved
-      currentRoom.discardPile.unshift({ type: piece.type, id: piece.id })
-      currentRoom.pendingEnslaved = null
-      currentRoom.enslavePromptOpen = false
-      currentRoom.enslaveExpiresAt = null
-      emitStateUpdate(currentRoom)
-      checkAndScheduleAutoEnd(currentRoom)
-    }, 15000)
-    enslaveTimers.set(room.code, enslaveTimer)
     return
   }
 
@@ -315,8 +289,7 @@ io.on('connection', socket => {
       socket.emit('state_update', { state: projectState(room, player.side), lastAction: null })
       // Re-emit open enslave prompt if applicable
       if (room.enslavePromptOpen && player.side === room.currentTurn) {
-        const ms = room.enslaveExpiresAt ? Math.max(0, room.enslaveExpiresAt - Date.now()) : 15000
-        socket.emit('enslave_prompt', { validSpaces: room.pendingEnslaved.validSpaces, pieceType: room.pendingEnslaved.piece.type, ms })
+        socket.emit('enslave_prompt', { validSpaces: room.pendingEnslaved.validSpaces, pieceType: room.pendingEnslaved.piece.type })
       }
       // Re-emit open bodyguard prompt to defending player
       if (room.bodyguardPromptOpen && room.pendingBodyguard &&
@@ -843,6 +816,26 @@ io.on('connection', socket => {
     room.reactionFrozen = true
   })
 
+  socket.on('reversal_cancel', () => {
+    const result = getRoomBySocket(socket.id)
+    if (!result) return
+    const { room, player } = result
+    if (!room.reactionWindowOpen || !room.pendingAction) return
+    if (player.side === room.pendingAction.actorSide) return
+    if (!room.reactionFrozen) return
+    room.reactionFrozen = false
+    // Restart timer with 10 seconds so they can still pass or intercept
+    const CANCEL_MS = 10000
+    const timer = setTimeout(() => {
+      reactionTimers.delete(room.code)
+      const currentRoom = getRoom(room.code)
+      if (!currentRoom || !currentRoom.reactionWindowOpen) return
+      executePendingAction(currentRoom)
+    }, CANCEL_MS)
+    reactionTimers.set(room.code, timer)
+    io.to(player.socketId).emit('reversal_cancelled', { ms: CANCEL_MS })
+  })
+
   // ── Enslave response ───────────────────────────────────────────────
   socket.on('enslave_response', ({ row, lane, discard }) => {
     const result = getRoomBySocket(socket.id)
@@ -851,12 +844,6 @@ io.on('connection', socket => {
 
     if (!room.enslavePromptOpen) return socket.emit('error', { message: 'No enslave prompt active.' })
     if (player.side !== room.currentTurn) return socket.emit('error', { message: 'Not your turn.' })
-
-    // Clear timeout
-    if (enslaveTimers.has(room.code)) {
-      clearTimeout(enslaveTimers.get(room.code))
-      enslaveTimers.delete(room.code)
-    }
 
     const { piece, validSpaces } = room.pendingEnslaved
 
@@ -874,7 +861,6 @@ io.on('connection', socket => {
 
     room.pendingEnslaved = null
     room.enslavePromptOpen = false
-    room.enslaveExpiresAt = null
 
     emitStateUpdate(room)
     checkAndScheduleAutoEnd(room)
@@ -936,19 +922,6 @@ io.on('connection', socket => {
             pieceType: captureResult.pieceType
           })
         }
-        const enslaveTimer = setTimeout(() => {
-          enslaveTimers.delete(room.code)
-          const currentRoom = getRoom(room.code)
-          if (!currentRoom || !currentRoom.enslavePromptOpen) return
-          const { piece } = currentRoom.pendingEnslaved
-          currentRoom.discardPile.unshift({ type: piece.type, id: piece.id })
-          currentRoom.pendingEnslaved = null
-          currentRoom.enslavePromptOpen = false
-          currentRoom.enslaveExpiresAt = null
-          emitStateUpdate(currentRoom)
-          checkAndScheduleAutoEnd(currentRoom)
-        }, 15000)
-        enslaveTimers.set(room.code, enslaveTimer)
       } else {
         checkAndScheduleAutoEnd(room)
       }

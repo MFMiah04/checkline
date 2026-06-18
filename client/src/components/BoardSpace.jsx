@@ -2,6 +2,24 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const SYMBOLS = { King: '♚', Queen: '♛', Rook: '♜', Bishop: '♝', Knight: '♞', Pawn: '♟' }
 
+const PIECE_TIPS = {
+  King:   'Moves 1 in any direction. If checkmated, you lose.',
+  Queen:  'Moves any distance in any direction. Sacrifice draws 3 cards.',
+  Rook:   'Moves any distance horizontally or vertically.',
+  Bishop: 'Moves any distance diagonally.',
+  Knight: 'Moves in an L-shape (2+1). Can jump over pieces.',
+  Pawn:   'Moves 1 forward. Attacks 1 diagonally forward.',
+}
+const TOKEN_TIPS = {
+  Enslave:    'After capturing an enemy piece, place it on your side instead.',
+  Shield:     'The next attack against this piece is blocked.',
+  Bodyguard:  'An adjacent piece will sacrifice itself to protect this one.',
+  Protection: 'Cannot receive debuffs while this is attached.',
+  Pin:        'Cannot move until this debuff is removed.',
+  Fatigue:    'Cannot attack until this debuff is removed.',
+  Silence:    'Cannot have buffs applied to it.',
+}
+
 export default function BoardSpace({
   piece, row, lane, side,
   isSelected, placingCard, isValidMove, isValidAttack, isAttackRange,
@@ -50,6 +68,12 @@ export default function BoardSpace({
           <div className="piece-tokens">
             {piece.buff   && <span className="piece-buff"   title={piece.buff.type}>{piece.buff.type.slice(0, 3)}</span>}
             {piece.debuff && <span className="piece-debuff" title={piece.debuff.type}>{piece.debuff.type.slice(0, 3)}</span>}
+          </div>
+          <div className="piece-hover-tooltip">
+            <div className="pht-title">{piece.type}</div>
+            {PIECE_TIPS[piece.type] && <div className="pht-desc">{PIECE_TIPS[piece.type]}</div>}
+            {piece.buff && <div className="pht-buff">{piece.buff.type}: {TOKEN_TIPS[piece.buff.type]}</div>}
+            {piece.debuff && <div className="pht-debuff">{piece.debuff.type}: {TOKEN_TIPS[piece.debuff.type]}</div>}
           </div>
         </div>
       )}
