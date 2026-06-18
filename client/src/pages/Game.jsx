@@ -547,7 +547,7 @@ export default function Game() {
   }
 
   function handleCardClick(i) {
-    if (!isMyTurn || !inActions || attackPending) return
+if (!isMyTurn || !inActions || attackPending) return
     if (floatingPiece) { setFloatingPiece(null); emit('select_piece', null) }
 
     const card = displayHand[i]
@@ -566,12 +566,24 @@ export default function Game() {
       return
     }
 
-    // Don't lift a new card while in insert mode
-    if (handInsertIndex !== null) return
-
     const serverIdx = myHand.findIndex(c => c.id === card.id)
-    setLiftedCard({ card, serverIdx })
-    emit('select_card_type', { cardType: card.type, cardId: card.id })
+
+    if (liftedCard) {
+      // Switching cards: commit the old card back into the hand, show new card selected in-hand
+      if (handInsertIndex !== null) {
+        const newOrder = [...displayHand]
+        setLocalHandOrder(newOrder)
+        emit('hand_reorder', { ids: newOrder.map(c => c.id) })
+      }
+      setLiftedCard({ card, serverIdx })
+      setHandInsertIndex(null)
+      insertRevealedRef.current = false
+      emit('select_card_type', { cardType: card.type, cardId: card.id })
+    } else {
+      // Normal initial selection: card floats (no insert mode yet)
+      setLiftedCard({ card, serverIdx })
+      emit('select_card_type', { cardType: card.type, cardId: card.id })
+    }
     setPiece(null)
 
     if (BUFF_TYPES.has(card.type) || DEBUFF_TYPES.has(card.type) || CONTROL_CARD_TYPES.has(card.type)) {
@@ -627,27 +639,42 @@ export default function Game() {
       const card = myHand.find(c => c.id === cardId)
       const serverIdx = myHand.findIndex(c => c.id === cardId)
 
+      function shake(msg) {
+        setErrorMsg(msg); setIsShaking(true)
+        setTimeout(() => setErrorMsg(''), 3000)
+        setTimeout(() => setIsShaking(false), 420)
+      }
+
       if (type === 'buff') {
-        if (piece?.owner === side && piece.type !== 'King' && !piece.buff && piece.debuff?.type !== 'Silence')
+        if (piece?.owner === side && piece.type !== 'King' && !piece.buff && piece.debuff?.type !== 'Silence') {
           emitAction({ type: 'play_buff', cardIndex: serverIdx, targetRow: row, targetLane: lane },
             { effectType: card?.type, targetType: piece?.type })
-        clearAll()
+          clearAll()
+        } else {
+          shake('Invalid buff target.')
+        }
         return
       }
 
       if (type === 'debuff') {
-        if (piece && piece.owner !== side && piece.type !== 'King' && !piece.debuff && piece.buff?.type !== 'Protection')
+        if (piece && piece.owner !== side && piece.type !== 'King' && !piece.debuff && piece.buff?.type !== 'Protection') {
           emitAction({ type: 'play_debuff', cardIndex: serverIdx, targetRow: row, targetLane: lane },
             { effectType: card?.type, targetType: piece?.type })
-        clearAll()
+          clearAll()
+        } else {
+          shake('Invalid debuff target.')
+        }
         return
       }
 
       if (type === 'return') {
-        if (piece?.owner === side && piece.type !== 'King')
+        if (piece?.owner === side && piece.type !== 'King') {
           emitAction({ type: 'play_return', cardIndex: serverIdx, pieceRow: row, pieceLane: lane },
             { pieceType: piece?.type })
-        clearAll()
+          clearAll()
+        } else {
+          shake('Invalid target.')
+        }
         return
       }
 
@@ -656,8 +683,10 @@ export default function Game() {
           const which = (piece.buff && piece.debuff) ? 'buff' : (piece.buff ? 'buff' : 'debuff')
           emitAction({ type: 'play_dispel', cardIndex: serverIdx, targetRow: row, targetLane: lane, which },
             { targetType: piece?.type })
+          clearAll()
+        } else {
+          shake('No buff or debuff to dispel there.')
         }
-        clearAll()
         return
       }
 
@@ -665,15 +694,17 @@ export default function Game() {
         if (step === 1) {
           if (piece?.owner === side && piece.debuff?.type !== 'Pin')
             setTargetMode({ ...targetMode, step: 2, firstPiece: { row, lane } })
-          else clearAll()
+          else shake('Select one of your non-pinned pieces.')
         } else {
           const ownRows = side === 0 ? [0, 1] : [2, 3]
           if (!piece && ownRows.includes(row)) {
             const fp = state.board[firstPiece.row]?.[firstPiece.lane]
             emitAction({ type: 'play_reposition', cardIndex: serverIdx, pieceRow: firstPiece.row, pieceLane: firstPiece.lane, toRow: row, toLane: lane },
               { pieceType: fp?.type })
+            clearAll()
+          } else {
+            shake('Choose an empty space on your side.')
           }
-          clearAll()
         }
         return
       }
@@ -682,12 +713,15 @@ export default function Game() {
         if (step === 1) {
           if (piece?.owner === side && piece.debuff?.type !== 'Pin')
             setTargetMode({ ...targetMode, step: 2, firstPiece: { row, lane } })
-          else clearAll()
+          else shake('Select one of your non-pinned pieces.')
         } else {
           if (piece?.owner === side && piece.debuff?.type !== 'Pin' &&
-              !(row === firstPiece.row && lane === firstPiece.lane))
+              !(row === firstPiece.row && lane === firstPiece.lane)) {
             emitAction({ type: 'play_swap', cardIndex: serverIdx, aRow: firstPiece.row, aLane: firstPiece.lane, bRow: row, bLane: lane })
-          clearAll()
+            clearAll()
+          } else {
+            shake('Choose a different non-pinned piece to swap.')
+          }
         }
         return
       }
@@ -704,14 +738,21 @@ export default function Game() {
       } else if (card.type === 'Purge') {
         emitAction({ type: 'play_purge', cardIndex: liftedCard.serverIdx })
       } else if (PLACEABLE.has(card.type)) {
-        if (!piece) {
-          const ownRows = side === 0 ? [0, 1] : [2, 3]
-          if (!ownRows.includes(row)) {
-            setErrorMsg('Can only place pieces on your own side.')
-            setTimeout(() => setErrorMsg(''), 3000)
-          } else {
-            emitAction({ type: 'place', cardIndex: liftedCard.serverIdx, row, lane }, { pieceType: card.type })
-          }
+        const ownRows = side === 0 ? [0, 1] : [2, 3]
+        if (piece) {
+          setErrorMsg('That space is occupied.')
+          setIsShaking(true)
+          setTimeout(() => setErrorMsg(''), 3000)
+          setTimeout(() => setIsShaking(false), 420)
+          return
+        } else if (!ownRows.includes(row)) {
+          setErrorMsg('Can only place on your own side.')
+          setIsShaking(true)
+          setTimeout(() => setErrorMsg(''), 3000)
+          setTimeout(() => setIsShaking(false), 420)
+          return
+        } else {
+          emitAction({ type: 'place', cardIndex: liftedCard.serverIdx, row, lane }, { pieceType: card.type })
         }
       }
       clearAll()
@@ -863,9 +904,7 @@ export default function Game() {
           </span>
         </div>
       )}
-      {!isGameOver && amInCheck && <div className="check-warning">Your King is in check!</div>}
-
-      <div className="opponent-area" ref={oppHandAreaRef}>
+<div className="opponent-area" ref={oppHandAreaRef}>
         <Hand cards={displayOppHand} faceDown isOpponent />
       </div>
 
@@ -1022,7 +1061,7 @@ export default function Game() {
             interceptedIds={state.interceptedCardIds}
             reactionIndices={reactionIndices}
             selectedIdx={handInsertIndex !== null ? handInsertIndex : undefined}
-            onCardClick={reactionWindowMode ? handleReactionCardClick : (isMyTurn && inActions && (!localHandOrder || handInsertIndex !== null) ? handleCardClick : undefined)}
+            onCardClick={reactionWindowMode ? handleReactionCardClick : (isMyTurn && inActions ? handleCardClick : undefined)}
             onReorder={handInsertIndex === null ? (newCards => {
               setLocalHandOrder(newCards)
               emit('hand_drag', { ids: newCards.map(c => c.id) })

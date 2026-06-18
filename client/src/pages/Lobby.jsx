@@ -31,12 +31,12 @@ export default function Lobby() {
       const myAvatar = (() => { try { return JSON.parse(localStorage.getItem('checkline_avatar')) || DEFAULT_AVATAR } catch { return DEFAULT_AVATAR } })()
       setPlayers([{ name: localStorage.getItem('checkline_name') || 'Host', side: 0, avatar: myAvatar }])
     },
-    room_joined({ code: roomCode, hostName }) {
+    room_joined({ code: roomCode, hostName, hostAvatar }) {
       setIsHost(false)
       localStorage.setItem('checkline_side', '1')
       const myAvatar = (() => { try { return JSON.parse(localStorage.getItem('checkline_avatar')) || DEFAULT_AVATAR } catch { return DEFAULT_AVATAR } })()
       setPlayers([
-        { name: hostName, side: 0, avatar: null },
+        { name: hostName, side: 0, avatar: hostAvatar ?? DEFAULT_AVATAR },
         { name: localStorage.getItem('checkline_name') || 'Guest', side: 1, avatar: myAvatar }
       ])
     },

@@ -254,7 +254,7 @@ io.on('connection', socket => {
     socket.join(room.code)
     const host = room.players[0]
 
-    socket.emit('room_joined', { code: room.code, hostName: host.name, token })
+    socket.emit('room_joined', { code: room.code, hostName: host.name, hostAvatar: host.avatar ?? null, token })
     io.to(host.socketId).emit('opponent_joined', { name: name.trim(), avatar: room.players[1].avatar })
   })
 
@@ -278,7 +278,7 @@ io.on('connection', socket => {
           socket.emit('opponent_joined', { name: room.players[1].name, avatar: room.players[1].avatar ?? null })
         }
       } else {
-        socket.emit('room_joined', { code: room.code, hostName: room.players[0].name, token: clientToken })
+        socket.emit('room_joined', { code: room.code, hostName: room.players[0].name, hostAvatar: room.players[0].avatar ?? null, token: clientToken })
         const host = room.players[0]
         if (host?.connected) {
           io.to(host.socketId).emit('opponent_joined', { name: player.name, avatar: player.avatar ?? null })

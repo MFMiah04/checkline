@@ -281,6 +281,15 @@ export function getThreatenedSpaces(board, piece, row, lane) {
 // ── Check detection ───────────────────────────────────────────────────────────
 
 export function isInCheck(board, kingRow, kingLane, kingOwner) {
+  // A Bodyguard-buffed friendly piece adjacent to the King intercepts all attacks
+  const protectedByBodyguard = [[1,0],[-1,0],[0,1],[0,-1]].some(([dr, dl]) => {
+    const r = kingRow + dr, l = kingLane + dl
+    if (!inBounds(r, l)) return false
+    const p = board[r][l]
+    return p?.owner === kingOwner && p?.buff?.type === 'Bodyguard'
+  })
+  if (protectedByBodyguard) return false
+
   for (let r = 0; r <= 3; r++) {
     for (let l = 0; l <= 4; l++) {
       const piece = board[r][l]
@@ -342,6 +351,14 @@ export function isCheckRemovalAction(room, action) {
       const target = sim[action.targetRow]?.[action.targetLane]
       if (!target || target.owner === playerSide) return false
       sim[action.targetRow][action.targetLane] = { ...target, debuff: { type: 'Fatigue' } }
+      break
+    }
+    case 'play_buff': {
+      const card = room.players[playerSide].hand[action.cardIndex]
+      if (card?.type !== 'Bodyguard') return false
+      const target = sim[action.targetRow]?.[action.targetLane]
+      if (!isValidBuffTarget(target) || target.owner !== playerSide) return false
+      sim[action.targetRow][action.targetLane] = { ...target, buff: { type: 'Bodyguard' } }
       break
     }
     default:
@@ -461,7 +478,21 @@ export function hasLegalCheckRemoval(room, playerSide) {
     }
   }
 
-  // 2g. play_debuff Fatigue on a checking piece (silences its threat)
+  // 2g. play_buff Bodyguard on a piece adjacent to the King (protects it in place)
+  if (player.hand.some(c => c.type === 'Bodyguard')) {
+    for (const [dr, dl] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const r = king.row + dr, l = king.lane + dl
+      if (!inBounds(r, l)) continue
+      const piece = room.board[r][l]
+      if (!isValidBuffTarget(piece) || piece.owner !== playerSide) continue
+      const sim = simBoard()
+      sim[r][l] = { ...sim[r][l], buff: { type: 'Bodyguard' } }
+      const k = findKing(sim, playerSide)
+      if (k && !isInCheck(sim, k.row, k.lane, playerSide)) return true
+    }
+  }
+
+  // 2h. play_debuff Fatigue on a checking piece (silences its threat)
   if (player.hand.some(c => c.type === 'Fatigue')) {
     for (let r = 0; r <= 3; r++) {
       for (let l = 0; l <= 4; l++) {
