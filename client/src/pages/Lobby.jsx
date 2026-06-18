@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getSocket, useSocket } from '../hooks/useSocket'
+import Avatar from '../components/Avatar'
+import { DEFAULT_AVATAR } from '../components/Avatar'
 
 export default function Lobby() {
   const { code } = useParams()
@@ -26,21 +28,24 @@ export default function Lobby() {
     room_created({ code: roomCode }) {
       setIsHost(true)
       localStorage.setItem('checkline_side', '0')
-      setPlayers([{ name: localStorage.getItem('checkline_name') || 'Host', side: 0 }])
+      const myAvatar = (() => { try { return JSON.parse(localStorage.getItem('checkline_avatar')) || DEFAULT_AVATAR } catch { return DEFAULT_AVATAR } })()
+      setPlayers([{ name: localStorage.getItem('checkline_name') || 'Host', side: 0, avatar: myAvatar }])
     },
     room_joined({ code: roomCode, hostName }) {
       setIsHost(false)
       localStorage.setItem('checkline_side', '1')
+      const myAvatar = (() => { try { return JSON.parse(localStorage.getItem('checkline_avatar')) || DEFAULT_AVATAR } catch { return DEFAULT_AVATAR } })()
       setPlayers([
-        { name: hostName, side: 0 },
-        { name: localStorage.getItem('checkline_name') || 'Guest', side: 1 }
+        { name: hostName, side: 0, avatar: null },
+        { name: localStorage.getItem('checkline_name') || 'Guest', side: 1, avatar: myAvatar }
       ])
     },
-    opponent_joined({ name }) {
+    opponent_joined({ name, avatar }) {
       setIsHost(true)
       setPlayers(prev => {
-        const host = prev[0] || { name: localStorage.getItem('checkline_name') || 'Host', side: 0 }
-        return [host, { name, side: 1 }]
+        const myAvatar = (() => { try { return JSON.parse(localStorage.getItem('checkline_avatar')) || DEFAULT_AVATAR } catch { return DEFAULT_AVATAR } })()
+        const host = prev[0] || { name: localStorage.getItem('checkline_name') || 'Host', side: 0, avatar: myAvatar }
+        return [host, { name, side: 1, avatar: avatar ?? null }]
       })
     },
     opponent_disconnected() {
@@ -77,6 +82,7 @@ export default function Lobby() {
       <div className="players">
         {players.map((p, i) => (
           <div key={i} className="player-slot">
+            <Avatar avatar={p.avatar} size={32} />
             {p.name} {i === 0 ? '(Host)' : '(Guest)'}
           </div>
         ))}

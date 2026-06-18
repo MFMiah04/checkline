@@ -10,20 +10,26 @@ function generateCode() {
   return code
 }
 
-export function createRoom(hostSocket, hostName, hostToken) {
+function sanitizeAvatar(avatar) {
+  if (!avatar || typeof avatar !== 'object') return null
+  if (avatar.customImage) return null  // block premature base64/URL uploads
+  return avatar
+}
+
+export function createRoom(hostSocket, hostName, hostToken, hostAvatar) {
   const code = generateCode()
   const room = {
     code,
     phase: 'lobby',
     players: [
-      { socketId: hostSocket.id, sessionToken: hostToken, name: hostName, side: 0, hand: [], mulliganDone: false, connected: true }
+      { socketId: hostSocket.id, sessionToken: hostToken, name: hostName, avatar: sanitizeAvatar(hostAvatar), side: 0, hand: [], mulliganDone: false, connected: true }
     ],
   }
   rooms.set(code, room)
   return room
 }
 
-export function joinRoom(code, guestSocket, guestName, guestToken) {
+export function joinRoom(code, guestSocket, guestName, guestToken, guestAvatar) {
   const room = rooms.get(code)
   if (!room) return { error: 'Room not found.' }
   if (room.phase !== 'lobby') return { error: 'Game already in progress.' }
@@ -38,6 +44,7 @@ export function joinRoom(code, guestSocket, guestName, guestToken) {
     socketId: guestSocket.id,
     sessionToken: guestToken,
     name: guestName,
+    avatar: sanitizeAvatar(guestAvatar),
     side: 1,
     hand: [],
     mulliganDone: false,

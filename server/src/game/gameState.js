@@ -94,6 +94,7 @@ export function projectState(room, playerIndex) {
     playAgainVotes: room.phase === 'ended' ? [...(room.playAgainVotes || [])] : [],
     players: players.map((p, i) => ({
       name: p.name,
+      avatar: p.avatar ?? null,
       side: p.side,
       mulliganDone: p.mulliganDone,
       hand: i === playerIndex ? p.hand : { count: p.hand.length, ids: p.hand.map(c => c.id) }

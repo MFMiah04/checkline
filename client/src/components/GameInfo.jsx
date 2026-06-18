@@ -1,23 +1,62 @@
-export default function GameInfo({ state, side, turnFlash }) {
-  const isMyTurn = state.currentTurn === side
-  const opponent = state.players[1 - side]
-  const me = state.players[side]
+import Avatar from './Avatar'
+
+function ActionDots({ remaining, total, disrupted = false }) {
+  return (
+    <div className="action-dots">
+      {Array.from({ length: total }).map((_, i) => {
+        const cls = (disrupted && i === total - 1)
+          ? 'dot-disrupted'
+          : i < remaining ? 'dot-filled' : 'dot-empty'
+        return <span key={i} className={`action-dot ${cls}`} title={disrupted && i === total - 1 ? 'Disrupted next turn' : undefined} />
+      })}
+    </div>
+  )
+}
+
+export default function GameInfo({ state, side, turnFlash, myWillBeDisrupted, oppWillBeDisrupted }) {
+  const isMyTurn   = state.currentTurn === side
+  const me         = state.players[side]
+  const opponent   = state.players[1 - side]
+  const actionsMax = state.actionsMax ?? 2
+
+  const myRemaining  = isMyTurn  ? (state.actionsRemaining ?? 0) : (myWillBeDisrupted  ? 1 : 2)
+  const myTotal      = isMyTurn  ? actionsMax : 2
+  const myDisrupted  = !isMyTurn && (myWillBeDisrupted ?? false)
+
+  const oppRemaining = !isMyTurn ? (state.actionsRemaining ?? 0) : (oppWillBeDisrupted ? 1 : 2)
+  const oppTotal     = !isMyTurn ? actionsMax : 2
+  const oppDisrupted = isMyTurn  && (oppWillBeDisrupted ?? false)
 
   return (
-    <div className={`game-info ${isMyTurn ? 'my-turn' : 'opp-turn'}${turnFlash ? ' turn-flash' : ''}`}>
-      <div className="turn-indicator">
-        <span className={`turn-label ${isMyTurn ? 'turn-label-mine' : 'turn-label-opp'}`}>
-          {isMyTurn ? 'YOUR TURN' : `${opponent.name}'s TURN`}
-        </span>
+    <div className={`game-info-bar${turnFlash ? ' turn-flash' : ''}`}>
+      {/* Left = me */}
+      <div className={`gib-side${isMyTurn ? ' gib-side-active' : ''}`}>
+        <div className="gib-avatar-wrap">
+          <Avatar avatar={me.avatar} size={48} />
+        </div>
+        <div className="gib-info">
+          <span className={`gib-name${isMyTurn ? ' gib-name-active' : ' gib-name-dim'}`}>{me.name}</span>
+          <ActionDots remaining={myRemaining} total={myTotal} disrupted={myDisrupted} />
+        </div>
       </div>
-      <div className="turn-players">
-        <span className={isMyTurn ? 'turn-player-active' : 'turn-player-waiting'}>{me.name}</span>
-        <span className="turn-vs">vs</span>
-        <span className={!isMyTurn ? 'turn-player-active' : 'turn-player-waiting'}>{opponent.name}</span>
+
+      <div className="gib-center">
+        <span className="gib-vs">VS</span>
+        {state.inCheck?.[1 - side] && (
+          <span className="check-indicator gib-check">{opponent.name} in check</span>
+        )}
       </div>
-      {state.inCheck?.[1 - side] && (
-        <span className="check-indicator">{opponent.name} in check</span>
-      )}
+
+      {/* Right = opponent */}
+      <div className={`gib-side gib-side-right${!isMyTurn ? ' gib-side-active' : ''}`}>
+        <div className="gib-info">
+          <span className={`gib-name${!isMyTurn ? ' gib-name-active' : ' gib-name-dim'}`}>{opponent.name}</span>
+          <ActionDots remaining={oppRemaining} total={oppTotal} disrupted={oppDisrupted} />
+        </div>
+        <div className="gib-avatar-wrap">
+          <Avatar avatar={opponent.avatar} size={48} />
+        </div>
+      </div>
     </div>
   )
 }

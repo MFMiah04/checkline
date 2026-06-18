@@ -850,7 +850,7 @@ export default function Game() {
           </div>
         </div>
       )}
-      <GameInfo state={state} side={side} turnFlash={turnFlash} />
+      <GameInfo state={state} side={side} turnFlash={turnFlash} myWillBeDisrupted={myWillBeDisrupted} oppWillBeDisrupted={oppWillBeDisrupted} />
       {isGameOver && (
         <div className="game-over-banner">
           <span className={iWon ? 'game-over-win' : 'game-over-lose'}>
@@ -866,14 +866,6 @@ export default function Game() {
       {!isGameOver && amInCheck && <div className="check-warning">Your King is in check!</div>}
 
       <div className="opponent-area" ref={oppHandAreaRef}>
-        <div className="player-label">
-          <span>{opponent.name} — {displayOppHand.count} card{displayOppHand.count !== 1 ? 's' : ''}</span>
-          <ActionDots
-            remaining={!isMyTurn ? (state.actionsRemaining ?? 0) : (oppWillBeDisrupted ? 1 : 2)}
-            total={!isMyTurn ? actionsMax : 2}
-            disrupted={isMyTurn && oppWillBeDisrupted}
-          />
-        </div>
         <Hand cards={displayOppHand} faceDown isOpponent />
       </div>
 
@@ -1116,15 +1108,6 @@ export default function Game() {
               {/* Spacer pushes end turn + forfeit to the right */}
               <div style={{ flex: 1 }} />
 
-              {/* Action circles */}
-              {!reactionWindowMode && !enslaveMode && !bodyguardMode && !isGameOver && (
-                <ActionDots
-                  remaining={isMyTurn ? (state.actionsRemaining ?? 0) : (myWillBeDisrupted ? 1 : 2)}
-                  total={isMyTurn ? actionsMax : 2}
-                  disrupted={!isMyTurn && myWillBeDisrupted}
-                />
-              )}
-
               {!reactionWindowMode && !enslaveMode && !bodyguardMode && isMyTurn && inActions && (
                 <button onClick={handleEndTurn}>End Turn</button>
               )}
@@ -1232,20 +1215,6 @@ function computePreviewBoard(board, action, actorSide) {
   return b
 }
 
-// ── Action dots ────────────────────────────────────────────────────────────────
-
-function ActionDots({ remaining, total, disrupted = false }) {
-  return (
-    <div className="action-dots">
-      {Array.from({ length: total }).map((_, i) => {
-        const cls = (disrupted && i === total - 1)
-          ? 'dot-disrupted'
-          : i < remaining ? 'dot-filled' : 'dot-empty'
-        return <span key={i} className={`action-dot ${cls}`} title={disrupted && i === total - 1 ? 'Disrupted next turn' : undefined} />
-      })}
-    </div>
-  )
-}
 
 // ── Mulligan ───────────────────────────────────────────────────────────────────
 

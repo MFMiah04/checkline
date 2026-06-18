@@ -222,16 +222,16 @@ io.on('connection', socket => {
   socket.emit('session_token', { token })
 
   // ── Create room ────────────────────────────────────────────────────
-  socket.on('create_room', ({ name }) => {
+  socket.on('create_room', ({ name, avatar }) => {
     if (!name?.trim()) return socket.emit('error', { message: 'Name required.' })
     leaveCurrentRoom(socket)
-    const room = createRoom(socket, name.trim(), token)
+    const room = createRoom(socket, name.trim(), token, avatar ?? null)
     socket.join(room.code)
     socket.emit('room_created', { code: room.code, token })
   })
 
   // ── Join room ──────────────────────────────────────────────────────
-  socket.on('join_room', ({ name, code }) => {
+  socket.on('join_room', ({ name, code, avatar }) => {
     if (!name?.trim()) return socket.emit('error', { message: 'Name required.' })
     if (!code?.trim()) return socket.emit('error', { message: 'Room code required.' })
 
@@ -247,7 +247,7 @@ io.on('connection', socket => {
       }
     }
 
-    const result = joinRoom(code.trim().toUpperCase(), socket, name.trim(), token)
+    const result = joinRoom(code.trim().toUpperCase(), socket, name.trim(), token, avatar ?? null)
     if (result.error) return socket.emit('error', { message: result.error })
 
     const room = result.room
@@ -255,7 +255,7 @@ io.on('connection', socket => {
     const host = room.players[0]
 
     socket.emit('room_joined', { code: room.code, hostName: host.name, token })
-    io.to(host.socketId).emit('opponent_joined', { name: name.trim() })
+    io.to(host.socketId).emit('opponent_joined', { name: name.trim(), avatar: room.players[1].avatar })
   })
 
   // ── Reconnect ──────────────────────────────────────────────────────
@@ -275,13 +275,13 @@ io.on('connection', socket => {
       if (player.side === 0) {
         socket.emit('room_created', { code: room.code, token: clientToken })
         if (room.players.length > 1 && room.players[1].connected) {
-          socket.emit('opponent_joined', { name: room.players[1].name })
+          socket.emit('opponent_joined', { name: room.players[1].name, avatar: room.players[1].avatar ?? null })
         }
       } else {
         socket.emit('room_joined', { code: room.code, hostName: room.players[0].name, token: clientToken })
         const host = room.players[0]
         if (host?.connected) {
-          io.to(host.socketId).emit('opponent_joined', { name: player.name })
+          io.to(host.socketId).emit('opponent_joined', { name: player.name, avatar: player.avatar ?? null })
         }
       }
     } else {

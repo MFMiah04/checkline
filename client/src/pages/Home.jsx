@@ -1,13 +1,25 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSocket } from '../hooks/useSocket'
+import AvatarEditor from '../components/AvatarEditor'
+import RulesModal from '../components/RulesModal'
+import { DEFAULT_AVATAR } from '../components/Avatar'
 
 export default function Home() {
   const [name, setName] = useState(() => localStorage.getItem('checkline_name') || '')
+  const [avatar, setAvatar] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('checkline_avatar')) || DEFAULT_AVATAR }
+    catch { return DEFAULT_AVATAR }
+  })
   const [joinCode, setJoinCode] = useState('')
   const [mode, setMode] = useState(null) // 'host' | 'join'
   const [error, setError] = useState('')
+  const [rulesOpen, setRulesOpen] = useState(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    localStorage.setItem('checkline_avatar', JSON.stringify(avatar))
+  }, [avatar])
 
   function handleHost() {
     if (!name.trim()) return setError('Enter a name first.')
@@ -21,8 +33,7 @@ export default function Home() {
     })
 
     socket.once('error', ({ message }) => setError(message))
-
-    socket.emit('create_room', { name: name.trim() })
+    socket.emit('create_room', { name: name.trim(), avatar })
   }
 
   function handleJoin() {
@@ -38,13 +49,14 @@ export default function Home() {
     })
 
     socket.once('error', ({ message }) => setError(message))
-
-    socket.emit('join_room', { name: name.trim(), code: joinCode.trim().toUpperCase() })
+    socket.emit('join_room', { name: name.trim(), code: joinCode.trim().toUpperCase(), avatar })
   }
 
   return (
     <div className="home">
       <h1>Checkline</h1>
+
+      <AvatarEditor avatar={avatar} setAvatar={setAvatar} />
 
       <input
         type="text"
@@ -85,6 +97,10 @@ export default function Home() {
           <button onClick={() => setMode(null)}>Back</button>
         </div>
       )}
+
+      <button className="btn-rules-link" onClick={() => setRulesOpen(true)}>Rules</button>
+
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
     </div>
   )
 }

@@ -67,7 +67,7 @@ button:disabled {
 
 /* Home */
 .home {
-  width: 320px;
+  width: 360px;
 }
 
 .home-buttons {
@@ -105,6 +105,9 @@ button:disabled {
   border: 1px solid #444;
   border-radius: 6px;
   padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .player-slot.waiting {
@@ -204,78 +207,93 @@ button:disabled {
   margin-top: 0.5rem;
 }
 
-/* ── Game info panel ─────────────────────────────────────────────── */
+/* ── Game info bar ───────────────────────────────────────────────── */
 
-.game-info {
+.game-info-bar {
   width: 100%;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 1.5rem;
-  background: #16213e;
-  border: 1px solid #2a3a5c;
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
-  transition: border-color 0.3s, box-shadow 0.3s;
+  padding: 0.15rem 0;
 }
 
-.game-info.my-turn {
-  border-color: #7c83fd;
-  box-shadow: 0 0 0 1px #7c83fd44;
-}
-
-.game-info.opp-turn {
-  border-color: #2a3a5c;
-}
-
-@keyframes turn-flash-anim {
-  0%   { box-shadow: 0 0 0 2px #7c83fdcc; }
-  60%  { box-shadow: 0 0 0 6px #7c83fd44; }
-  100% { box-shadow: 0 0 0 1px #7c83fd44; }
-}
-
-.game-info.turn-flash {
-  animation: turn-flash-anim 1.2s ease-out forwards;
-}
-
-.turn-indicator {
-  flex: 1;
-}
-
-.turn-label {
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  font-size: 1rem;
-}
-
-.turn-label-mine {
-  color: #7c83fd;
-}
-
-.turn-label-opp {
-  color: #888;
-}
-
-.turn-players {
+.gib-side {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: #666;
+  gap: 0.6rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 10px;
+  transition: background 0.25s;
 }
 
-.turn-player-active {
-  color: #ccc;
+.gib-side-right {
+  flex-direction: row-reverse;
+}
+
+.gib-side-active {
+  background: rgba(124, 131, 253, 0.13);
+}
+
+.gib-avatar-wrap {
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@keyframes gib-pulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.08); }
+  65%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+.game-info-bar.turn-flash .gib-side-active {
+  animation: gib-pulse 0.7s ease-out forwards;
+}
+
+.gib-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gib-name {
+  font-size: 1.1rem;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
 }
 
-.turn-player-waiting {
-  color: #555;
+.gib-name-active {
+  color: #e8e8ff;
 }
 
-.turn-vs {
-  color: #444;
-  font-size: 0.7rem;
+.gib-name-dim {
+  color: #404055;
+}
+
+.gib-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 0 0.4rem;
+}
+
+.gib-vs {
+  font-size: 1rem;
+  color: #6670a0;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.gib-check {
+  font-size: 0.6rem;
+  font-weight: 600;
 }
 
 .actions-remaining {
@@ -553,9 +571,17 @@ button:disabled {
 }
 
 .opponent-hand {
-  gap: 3px;
+  gap: 0;
   min-height: 86px;
   padding-top: 4px;
+}
+
+.opponent-hand > div {
+  margin-left: -14px;
+}
+
+.opponent-hand > div:first-child {
+  margin-left: 0;
 }
 
 .hand-empty {
@@ -1131,8 +1157,8 @@ button:disabled {
   align-items: center;
 }
 .action-dot {
-  width: 9px;
-  height: 9px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
@@ -1140,3 +1166,209 @@ button:disabled {
 .dot-filled    { background: #7c83fd; }
 .dot-empty     { background: transparent; border: 1.5px solid #4a5080; }
 .dot-disrupted { background: transparent; border: 1.5px solid #ef5350; opacity: 0.45; }
+
+/* ── Avatar editor ───────────────────────────────────────────────────── */
+
+.avatar-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.avatar-editor-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 2px solid #2a3a6a;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #16213e;
+}
+
+.avatar-option-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.avatar-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+
+.avatar-swatch.selected {
+  border-color: #7c83fd;
+  box-shadow: 0 0 0 1px #7c83fd;
+}
+
+.avatar-opt-btn {
+  background: #16213e;
+  border: 1px solid #2a3a6a;
+  color: #c0ccee;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.1s, background 0.1s;
+}
+
+.avatar-opt-btn.selected {
+  border-color: #7c83fd;
+  background: rgba(124, 131, 253, 0.15);
+  color: #7c83fd;
+}
+
+.avatar-opt-btn:hover:not(.selected) {
+  border-color: #4a5a8a;
+}
+
+.avatar-dice-btn {
+  background: transparent;
+  border: 1px solid #2a3a6a;
+  font-size: 1rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+  color: #e0e0e0;
+  transition: border-color 0.1s;
+}
+
+.avatar-dice-btn:hover {
+  border-color: #7c83fd;
+  background: rgba(124, 131, 253, 0.1);
+}
+
+/* ── Avatar editor arrow navigation ─────────────────────────────── */
+
+.avatar-editor-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.avatar-arrow-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.avatar-arrow-btn {
+  background: transparent;
+  border: none;
+  color: #6677aa;
+  font-size: 0.6rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+
+.avatar-arrow-btn:hover {
+  color: #c0ccee;
+  background: transparent;
+}
+
+/* ── Rules modal ─────────────────────────────────────────────────────── */
+
+.modal-dialog--rules {
+  min-width: 320px;
+  max-width: 520px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-color: rgba(124, 131, 253, 0.35);
+  text-align: left;
+  padding: 1.5rem 1.75rem;
+}
+
+.modal-dialog--rules .modal-title {
+  color: #c8d8ff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #556;
+  font-size: 1rem;
+  padding: 0;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-close-btn:hover {
+  color: #c8d8ff;
+  background: transparent;
+}
+
+.modal-rules-body {
+  overflow-y: auto;
+  flex: 1;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #9aabcc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+  padding-right: 0.25rem;
+}
+
+.modal-rules-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7c83fd;
+  margin-bottom: 0.2rem;
+}
+
+.btn-rules-link {
+  background: transparent;
+  border: 1px solid #2a3a6a;
+  color: #7c83fd;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.9rem;
+  align-self: center;
+  margin-top: 0.5rem;
+  display: block;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.btn-rules-link:hover {
+  background: rgba(124, 131, 253, 0.1);
+}
+
+/* ── In-game avatar placement ────────────────────────────────────────── */
+
+.turn-player-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.player-label-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
