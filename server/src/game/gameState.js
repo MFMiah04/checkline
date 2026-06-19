@@ -17,8 +17,8 @@ export function initGameState(room) {
 
   // Place Kings on the board (row 0 lane 2 for side 0; row 3 lane 2 for side 1)
   const board = Array.from({ length: 4 }, () => Array(5).fill(null))
-  board[0][2] = { type: 'King', owner: 0, buff: null, debuff: null, canActThisTurn: false }
-  board[3][2] = { type: 'King', owner: 1, buff: null, debuff: null, canActThisTurn: false }
+  board[0][2] = { type: 'King', owner: 0, buff: null, debuff: null, firstStatus: null, canActThisTurn: false }
+  board[3][2] = { type: 'King', owner: 1, buff: null, debuff: null, firstStatus: null, canActThisTurn: false }
 
   // Randomly determine who goes first
   const currentTurn = Math.random() < 0.5 ? 0 : 1

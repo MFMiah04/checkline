@@ -166,7 +166,7 @@ button:disabled {
   gap: 0.75rem;
   padding: 1rem;
   width: 100%;
-  max-width: 680px;
+  max-width: 900px;
 }
 
 .opponent-label {
@@ -292,8 +292,9 @@ button:disabled {
 }
 
 .gib-check {
-  font-size: 0.6rem;
-  font-weight: 600;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .actions-remaining {
@@ -317,7 +318,7 @@ button:disabled {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  width: 76px;
+  width: 90px;
   flex-shrink: 0;
 }
 
@@ -330,13 +331,13 @@ button:disabled {
 
 .pile-stack {
   position: relative;
-  width: 68px;
-  height: 96px;
+  width: 80px;
+  height: 112px;
 }
 
 .pile-empty {
-  width: 68px;
-  height: 96px;
+  width: 80px;
+  height: 112px;
   border: 1px dashed #2a3a5c;
   border-radius: 6px;
   display: flex;
@@ -348,8 +349,8 @@ button:disabled {
 
 .pile-card {
   position: absolute;
-  width: 68px;
-  height: 96px;
+  width: 80px;
+  height: 112px;
   pointer-events: none;
 }
 
@@ -376,8 +377,8 @@ button:disabled {
 
 .board-space {
   position: relative;
-  width: 95px;
-  height: 95px;
+  width: 130px;
+  height: 130px;
   background: #16213e;
   border: 1px solid #1e3060;
   border-radius: 5px;
@@ -399,7 +400,7 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   pointer-events: none;
-  z-index: 1;
+  z-index: 10;
 }
 
 .board-space.own-side {
@@ -465,51 +466,114 @@ button:disabled {
   background-color: rgba(239, 83, 80, 0.12);
 }
 
-/* ── Pieces ──────────────────────────────────────────────────────── */
+/* ── Piece group (wraps board-card + status cards, enables enemy rotation) ── */
 
-.piece {
+.piece-group {
+  position: absolute;
+  inset: 0;
+}
+.piece-group-enemy {
+  transform: rotate(180deg);
+}
+
+/* ── Board mini-card (piece displayed as card within cell) ──────── */
+
+.board-card {
+  position: absolute;
+  width: 64px;
+  height: 90px;
+  top: 8px;
+  left: 33px; /* (130-64)/2 */
+  background: linear-gradient(170deg, #16213e 0%, #1c2850 100%);
+  border: 1.5px solid #2a3a5c;
+  border-top-width: 3px;
+  border-top-color: #6a6a6a;
+  border-radius: 6px;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  justify-content: center;
+  gap: 2px;
+  padding: 18px 4px;
+  pointer-events: none;
   color: #c8d8ff;
-  position: relative;
 }
 
-.piece.enemy {
-  color: #ff9090;
-}
+.board-card.cant-act { opacity: 0.32; filter: grayscale(0.7); }
 
-.piece-symbol {
+.board-card-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: #6a6a6a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+.board-card-corner.tl { top: 4px; left: 4px; }
+.board-card-corner.br { bottom: 4px; right: 4px; transform: rotate(180deg); }
+
+.board-card-symbol {
   font-size: 1.6rem;
   line-height: 1;
 }
 
-.piece-label {
-  font-size: 0.6rem;
-  opacity: 0.7;
-  letter-spacing: 0.04em;
+.board-card-name {
+  font-size: 0.52rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  opacity: 0.8;
 }
 
-.piece-tokens {
-  display: flex;
-  gap: 2px;
-  font-size: 0.65rem;
+/* ── Board status card (buff/debuff placed on board — same card design as hand, rotated 90°) ── */
+
+/* Overrides card's size/position and adds landscape rotation to match board-card scale (64×90) */
+.board-status-card {
+  position: absolute;
+  width: 64px;
+  height: 90px;
+  left: 33px; /* (130 - 64) / 2, same as board-card */
+  padding: 16px 4px;
+  transform: rotate(90deg);
+  pointer-events: none;
 }
 
-.piece.cant-act {
-  opacity: 0.32;
-  filter: grayscale(0.7);
+/* Scale corner badges down to match board-card-corner size */
+.board-status-card .card-corner-tl,
+.board-status-card .card-corner-br {
+  width: 14px;
+  height: 14px;
+  top: 4px;
+  left: 4px;
+  font-size: 8px;
+}
+.board-status-card .card-corner-br {
+  top: auto;
+  left: auto;
+  bottom: 4px;
+  right: 4px;
 }
 
-.piece-buff {
-  color: #81c784;
-  font-weight: bold;
-}
+.board-status-card .card-center-art { font-size: 1.05rem; }
+.board-status-card .card-name       { font-size: 0.52rem; }
 
-.piece-debuff {
-  color: #e57373;
-  font-weight: bold;
+/* First placed: lower position (z=2). 64×90 rotated → visual 90×64, center_y = T+45, visual_top = T+13 */
+/* T=45 → visual y=58 to y=122 */
+.board-status-card.status-first  { top: 45px; z-index: 2; }
+
+/* Second placed: higher position (z=3). T=13 → visual y=26 to y=90 */
+.board-status-card.status-second { top: 13px; z-index: 3; }
+
+/* Ghost origin cell: fade piece-group (board-card + status cards) */
+.board-space.floating-origin .piece-group {
+  opacity: 0.18;
+  filter: grayscale(1);
 }
 
 /* ── Board piece hover tooltip ───────────────────────────────────── */
@@ -565,14 +629,14 @@ button:disabled {
   gap: 10px;
   justify-content: center;
   align-items: flex-end;
-  min-height: 110px;
+  min-height: 130px;
   padding: 8px 12px 0;
   overflow: visible;
 }
 
 .opponent-hand {
   gap: 0;
-  min-height: 86px;
+  min-height: 100px;
   padding-top: 4px;
 }
 
@@ -593,18 +657,19 @@ button:disabled {
 /* ── Cards ───────────────────────────────────────────────────────── */
 
 .card {
-  width: 68px;
-  height: 96px;
-  background: #16213e;
-  border: 1px solid #2a3a5c;
-  border-radius: 6px;
+  width: 80px;
+  height: 112px;
+  background: linear-gradient(170deg, #16213e 0%, #1c2850 100%);
+  border: 1.5px solid #2a3a5c;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 4px;
+  gap: 3px;
+  padding: 24px 6px;
   text-align: center;
+  position: relative;
   transition: border-color 0.1s, transform 0.1s;
   border-top-width: 3px;
 }
@@ -646,26 +711,62 @@ button:disabled {
   border-top-color: rgba(255, 107, 107, 0.6) !important;
 }
 
+/* ── Card corner badges (top-left + bottom-right, like playing cards) ── */
+
+.card-corner-tl,
+.card-corner-br {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+.card-corner-tl { top: 6px; left: 6px; }
+.card-corner-br { bottom: 6px; right: 6px; transform: rotate(180deg); }
+
+.card.piece    .card-corner-tl, .card.piece    .card-corner-br { background: #6a6a6a; }
+.card.control  .card-corner-tl, .card.control  .card-corner-br { background: #2d8db5; }
+.card.buff     .card-corner-tl, .card.buff     .card-corner-br { background: #4a8a4d; }
+.card.debuff   .card-corner-tl, .card.debuff   .card-corner-br { background: #a04040; }
+.card.reaction .card-corner-tl, .card.reaction .card-corner-br { background: #a08000; }
+
+/* ── Card center art / name ─────────────────────────────────────── */
+
+.card-center-symbol {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.card-center-art {
+  font-size: 1.5rem;
+  line-height: 1;
+  opacity: 0.85;
+}
+
 .card-intercepted-label {
-  font-size: 0.55rem;
+  position: absolute;
+  top: 28px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.5rem;
   font-weight: 700;
   color: #ff6b6b;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  margin-bottom: 2px;
 }
 
 .card-name {
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 600;
-  color: #e0e0e0;
-}
-
-.card-category {
-  font-size: 0.6rem;
-  opacity: 0.5;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: #c8d8ff;
+  margin-top: 1px;
 }
 
 .card-tooltip {
@@ -1024,37 +1125,39 @@ button:disabled {
   color: #7c83fd;
 }
 
-/* ── Floating piece (selected piece follows cursor on board) ─────────── */
+/* ── Floating card wrappers (hovering above target cell) ─────────── */
 
-.board-space.floating-origin .piece {
-  opacity: 0.18;
-  filter: grayscale(1);
-  pointer-events: none;
-}
-
-.floating-piece-card {
+/* Board piece: fills cell, contains piece-group with board-card + status cards */
+.floating-board-wrapper {
   position: absolute;
   inset: 0;
-  margin: auto;
   z-index: 20;
   pointer-events: none;
-  width: 68px;
-  height: 96px;
-  background: #1e2a54;
-  border: 2px solid #7c83fd;
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
   filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
 }
 
-.floating-piece-card .piece-symbol { font-size: 1.6rem; line-height: 1; color: #c8d8ff; }
-.floating-piece-card .piece-label  { font-size: 0.6rem; opacity: 0.75; color: #c8d8ff; }
-.floating-piece-card.enemy .piece-symbol { color: #ff9090; }
-.floating-piece-card.enemy .piece-label  { color: #ff9090; }
+/* Highlight the board-card when it's floating */
+.floating-board-wrapper .board-card {
+  border-color: rgba(124, 131, 253, 0.6);
+  border-top-color: #7c83fd;
+}
+
+/* Hand card (portrait or landscape): fills cell, centers card within */
+.floating-hand-wrapper {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
+}
+
+/* Buff/debuff hand card floating preview: landscape via rotation */
+.floating-landscape {
+  transform: rotate(90deg);
+}
 
 /* ── Confirm target pulse ─────────────────────────────────────────────── */
 
@@ -1071,12 +1174,12 @@ button:disabled {
 /* ── Capture slide overlay ────────────────────────────────────────────── */
 
 .capture-slide-piece {
-  width: 68px;
-  height: 96px;
+  width: 80px;
+  height: 112px;
   background: #1e2a54;
-  border: 1px solid #2a3a6a;
+  border: 1.5px solid #2a3a6a;
   border-top-width: 3px;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1084,8 +1187,8 @@ button:disabled {
   gap: 3px;
 }
 
-.capture-slide-piece .piece-symbol { font-size: 1.6rem; line-height: 1; color: #c8d8ff; }
-.capture-slide-piece .piece-label  { font-size: 0.6rem; opacity: 0.7; color: #c8d8ff; }
+.capture-slide-piece .piece-symbol { font-size: 2.0rem; line-height: 1; color: #c8d8ff; }
+.capture-slide-piece .piece-label  { font-size: 0.65rem; opacity: 0.7; color: #c8d8ff; }
 .capture-slide-piece.enemy .piece-symbol { color: #ff9090; }
 .capture-slide-piece.enemy .piece-label  { color: #ff9090; }
 
@@ -1129,11 +1232,11 @@ button:disabled {
   transform: translate(-50%, -50%) scale(1.08);
   z-index: 30;
   pointer-events: none;
-  width: 68px;
-  height: 96px;
+  width: 80px;
+  height: 112px;
   background: #1e2a54;
   border: 2px solid #7c83fd;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1141,8 +1244,9 @@ button:disabled {
   gap: 3px;
   filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
 }
-.pile-floating-preview .piece-symbol { font-size: 1.6rem; line-height: 1; color: #c8d8ff; }
-.pile-floating-preview .piece-label  { font-size: 0.6rem; opacity: 0.75; color: #c8d8ff; }
+.pile-floating-preview .piece-symbol { font-size: 2.0rem; line-height: 1; color: #c8d8ff; }
+.pile-floating-preview .piece-label  { font-size: 0.65rem; opacity: 0.75; color: #c8d8ff; }
+.pile-floating-preview .card-name    { font-size: 0.68rem; color: #c8d8ff; }
 .pile-floating-preview.enemy .piece-symbol { color: #ff9090; }
 .pile-floating-preview.enemy .piece-label  { color: #ff9090; }
 .pile-floating-preview.pile-floating-facedown {

@@ -42,7 +42,10 @@ export default function GameInfo({ state, side, turnFlash, myWillBeDisrupted, op
 
       <div className="gib-center">
         <span className="gib-vs">VS</span>
-        {state.inCheck?.[1 - side] && (
+        {state.inCheck?.[side] && (
+          <span className="check-indicator gib-check">Your King in check</span>
+        )}
+        {!state.inCheck?.[side] && state.inCheck?.[1 - side] && (
           <span className="check-indicator gib-check">{opponent.name} in check</span>
         )}
       </div>

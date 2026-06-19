@@ -33,6 +33,27 @@ const TOOLTIP = {
   Reversal:   'React to an opponent\'s buff or debuff. Redirect it to a different target.',
 }
 
+// Chess piece symbols — used as center art AND corner badge for piece cards
+const PIECE_SYMBOLS = { King: '♚', Queen: '♛', Rook: '♜', Bishop: '♝', Knight: '♞', Pawn: '♟' }
+
+// Center art for non-piece cards
+const CARD_ART = {
+  Reposition: '→', Swap: '⇄', Command: '+', Disrupt: '⊗', Dispel: '×',
+  Purge: '⊛', Return: '↩', Enslave: '∞',
+  Shield: '◉', Bodyguard: '◈', Protection: '◇',
+  Pin: '⊘', Fatigue: '⏸', Silence: '∅',
+  Intercept: '✕', Reversal: '↺',
+}
+
+// Corner badge abbreviation for non-piece cards
+const CARD_ABBREV = {
+  Reposition: 'Re', Swap: 'Sw', Command: 'Cm', Disrupt: 'Di', Dispel: 'Dp',
+  Purge: 'Pu', Return: 'Rt', Enslave: 'En',
+  Shield: 'Sh', Bodyguard: 'Bg', Protection: 'Pr',
+  Pin: 'Pi', Fatigue: 'Fa', Silence: 'Si',
+  Intercept: 'In', Reversal: 'Rv',
+}
+
 export default function CardComponent({ card, faceDown = false, selected = false, intercepted = false, reactionAvailable = false, onClick }) {
   if (faceDown) {
     return <div className="card face-down" />
@@ -40,17 +61,34 @@ export default function CardComponent({ card, faceDown = false, selected = false
 
   const category = CATEGORY[card.type] || ''
   const isClickable = onClick && !intercepted
-
   const tooltip = TOOLTIP[card.type]
+
+  const pieceSymbol = PIECE_SYMBOLS[card.type]
+  const cornerText  = pieceSymbol ?? CARD_ABBREV[card.type] ?? card.type.slice(0, 2)
+  const centerArt   = pieceSymbol ?? CARD_ART[card.type] ?? card.type[0]
+  const isPiece     = !!pieceSymbol
 
   return (
     <div
       className={`card ${category}${selected ? ' selected' : ''}${intercepted ? ' intercepted' : ''}${reactionAvailable ? ' reaction-available' : ''}${isClickable ? ' clickable' : ''}`}
       onClick={intercepted ? undefined : onClick}
     >
+      {/* Top-left corner badge */}
+      <div className="card-corner-tl">{cornerText}</div>
+
       {intercepted && <span className="card-intercepted-label">Intercepted</span>}
+
+      {/* Center art */}
+      {isPiece
+        ? <span className="card-center-symbol">{centerArt}</span>
+        : <span className="card-center-art">{centerArt}</span>
+      }
+
       <span className="card-name">{card.type}</span>
-      <span className="card-category">{category}</span>
+
+      {/* Bottom-right corner badge (mirrored, rotated 180° via CSS) */}
+      <div className="card-corner-br">{cornerText}</div>
+
       {tooltip && <div className="card-tooltip">{tooltip}</div>}
     </div>
   )

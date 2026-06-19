@@ -44,7 +44,7 @@ export function applyPlace(room, player, { cardIndex, row, lane }) {
 
   room.board[row][lane] = {
     id: card.id, type: card.type, owner: player.side,
-    buff: null, debuff: null, canActThisTurn: false
+    buff: null, debuff: null, firstStatus: null, canActThisTurn: false
   }
   hand.splice(cardIndex, 1)
   spendAction(room, player)
@@ -91,6 +91,7 @@ export function applyDirectAttack(room, player, { row, lane, targetRow, targetLa
   if (captured.buff?.type === 'Shield') {
     discardToken(room, captured.buff)
     captured.buff = null
+    if (captured.firstStatus === 'buff') captured.firstStatus = null
     piece.canActThisTurn = false
     spendAction(room, player)
     return { lastAction: { ...la, secondaryEffect: 'shield_absorbed' } }
@@ -122,6 +123,7 @@ export function applyDirectAttack(room, player, { row, lane, targetRow, targetLa
     discardToken(room, captured.debuff)
     captured.buff = null
     captured.debuff = null
+    captured.firstStatus = null
     captured.owner = player.side
     captured.canActThisTurn = false
     // Remove from board pending placement decision
@@ -135,6 +137,7 @@ export function applyDirectAttack(room, player, { row, lane, targetRow, targetLa
     // Discard Enslave buff from attacker
     discardToken(room, piece.buff)
     piece.buff = null
+    if (piece.firstStatus === 'buff') piece.firstStatus = null
     piece.canActThisTurn = false
     spendAction(room, player)
 
@@ -245,11 +248,13 @@ export function applyBuff(room, player, { cardIndex, targetRow, targetLane }) {
   if (!isValidBuffTarget(target)) return { error: 'Invalid buff target.' }
 
   target.buff = { type: card.type, id: card.id }
+  if (!target.firstStatus) target.firstStatus = 'buff'
 
   // Protection special case: strip any existing debuff immediately
   if (card.type === 'Protection' && target.debuff) {
     discardToken(room, target.debuff)
     target.debuff = null
+    target.firstStatus = 'buff'
   }
 
   player.hand.splice(cardIndex, 1)
@@ -271,11 +276,13 @@ export function applyDebuff(room, player, { cardIndex, targetRow, targetLane }) 
   if (!isValidDebuffTarget(target)) return { error: 'Invalid debuff target.' }
 
   target.debuff = { type: card.type, id: card.id }
+  if (!target.firstStatus) target.firstStatus = 'debuff'
 
   // Silence special case: strip any existing buff immediately
   if (card.type === 'Silence' && target.buff) {
     discardToken(room, target.buff)
     target.buff = null
+    target.firstStatus = 'debuff'
   }
 
   player.hand.splice(cardIndex, 1)
@@ -342,6 +349,7 @@ export function applyDispel(room, player, { cardIndex, targetRow, targetLane, wh
 
   discardToken(room, target[which])
   target[which] = null
+  if (target.firstStatus === which) target.firstStatus = null
 
   player.hand.splice(cardIndex, 1)
   spendAction(room, player)
@@ -388,6 +396,7 @@ export function applyPurge(room, player, { cardIndex }) {
       discardToken(room, piece.debuff)
       piece.buff = null
       piece.debuff = null
+      piece.firstStatus = null
     }
   }
 
@@ -442,6 +451,7 @@ export function resolveCapture(room, attackerRow, attackerLane, targetRow, targe
     discardToken(room, captured.debuff)
     captured.buff = null
     captured.debuff = null
+    captured.firstStatus = null
     captured.owner = piece.owner
     captured.canActThisTurn = false
     room.board[targetRow][targetLane] = null
@@ -452,6 +462,7 @@ export function resolveCapture(room, attackerRow, attackerLane, targetRow, targe
         if (!room.board[r][l]) validSpaces.push({ row: r, lane: l })
     discardToken(room, piece.buff)
     piece.buff = null
+    if (piece.firstStatus === 'buff') piece.firstStatus = null
 
     if (validSpaces.length > 0) {
       room.pendingEnslaved = { piece: captured, validSpaces, attackerRow, attackerLane }
