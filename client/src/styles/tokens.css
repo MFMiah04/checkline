@@ -1,0 +1,61 @@
+/* Daylight Oak design tokens: every colour, font and radius the interface uses.
+   Change a value here and it changes everywhere. */
+:root {
+  /* Surfaces */
+  --linen: #EDE3D0;        /* page background */
+  --panel: #E3D6BD;        /* secondary panels */
+  --ivory: #FBF6EA;        /* cards, dialogs, raised panels */
+  --ivory-shade: #F3EBD9;  /* inset boxes on ivory */
+  --line: #C9B48F;         /* borders on light surfaces */
+  --line-soft: #E2D3B2;    /* dividers */
+
+  /* Table */
+  --oak: #B98A5E;
+  --oak-edge: #9C7049;
+  --felt: #4F7E5C;
+  --cell: #5E8C6A;
+  --cell-edge: #4A7556;
+  --cell-target: #74A381;
+  --target-glow: #F3DE96;
+  --attack: #F0A58C;
+  --attack-cell: #8A6A55;
+
+  /* Brass accents */
+  --brass: #C9A24A;
+  --brass-pressed: #9C7A2A;
+  --brass-light: #E3C66F;
+
+  /* Text */
+  --ink: #2B2016;
+  --muted: #5E5040;        /* 5.9:1 on linen */
+
+  /* Sides */
+  --mine: #FBF6EA;         /* your pieces: ivory */
+  --mine-ink: #2B2016;
+  --theirs: #4A3324;       /* opponent's pieces: walnut */
+  --theirs-ink: #FBF6EA;
+  --card-back: #8A3B2C;
+
+  /* Card types */
+  --type-piece: #2B2016;
+  --type-control: #2F6F73;
+  --type-buff: #3F6B3A;
+  --type-debuff: #8A3B2C;
+  --type-reaction: #7A5A12;
+
+  /* Feedback */
+  --danger: #A3352A;
+  --success: #3F6B3A;
+
+  /* Type */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Work Sans', system-ui, sans-serif;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow-raised: 0 6px 16px rgba(74, 51, 36, 0.14);
+  --shadow-card: 0 4px 10px rgba(74, 51, 36, 0.25);
+  --focus-ring: 0 0 0 3px var(--ivory), 0 0 0 5px var(--ink);
+}

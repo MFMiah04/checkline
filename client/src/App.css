@@ -5,18 +5,22 @@
 }
 
 body {
-  font-family: system-ui, sans-serif;
-  background: #1a1a2e;
-  color: #e0e0e0;
+  font-family: var(--font-body);
+  background: var(--linen);
+  color: var(--ink);
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
 h1 {
   font-size: 2.5rem;
-  letter-spacing: 0.1em;
   margin-bottom: 1.5rem;
   text-align: center;
 }
@@ -24,42 +28,77 @@ h1 {
 input[type="text"] {
   display: block;
   width: 100%;
-  padding: 0.6rem 0.9rem;
+  height: 44px;
+  padding: 0 12px;
+  font-family: inherit;
   font-size: 1rem;
-  background: #16213e;
-  border: 1px solid #444;
-  border-radius: 6px;
-  color: #e0e0e0;
+  background: #FFFFFF;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
   margin-bottom: 0.75rem;
 }
 
-input[type="text"]:focus {
+input[type="text"]:focus-visible {
   outline: none;
-  border-color: #7c83fd;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--brass-light);
 }
 
+/* Primary button: brass. Secondary buttons use .btn-secondary. */
 button {
-  padding: 0.6rem 1.4rem;
+  min-height: 44px;
+  padding: 0 1.4rem;
+  font-family: var(--font-display);
   font-size: 1rem;
+  font-weight: 700;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  background: #7c83fd;
-  color: #fff;
-  transition: background 0.15s;
+  background: var(--brass);
+  color: var(--ink);
+  box-shadow: inset 0 -3px 0 var(--brass-pressed);
+  transition: background 0.15s, transform 0.1s;
 }
 
 button:hover:not(:disabled) {
-  background: #5c62d6;
+  background: var(--brass-light);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 -1px 0 var(--brass-pressed);
 }
 
 button:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: default;
 }
 
+/* A clear focus ring for keyboard users on every control */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+a {
+  color: var(--type-reaction);
+}
+
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
 .error {
-  color: #ff6b6b;
+  color: var(--danger);
   font-size: 0.9rem;
   margin-bottom: 0.75rem;
   text-align: center;
