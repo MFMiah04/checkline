@@ -9,7 +9,8 @@ import DiscardPile from '../components/DiscardPile'
 import CaptureSlide from '../components/CaptureSlide'
 import ReturnSlide from '../components/ReturnSlide'
 import DeckSlide from '../components/DeckSlide'
-import { isValidMove, isValidAttack, getAttackRange, isPinned, isFatigued } from '../utils/clientRules'
+import { isValidMove, isValidAttack, isPinned, isFatigued } from '@checkline/engine'
+import { getAttackRange } from '../utils/attackRange'
 
 const PLACEABLE   = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
 const INSTANT     = new Set(['Command', 'Disrupt'])
