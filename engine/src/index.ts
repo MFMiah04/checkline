@@ -5,6 +5,7 @@ export * from './random.js'
 export * from './rules.js'
 export * from './state.js'
 export * from './legal.js'
+export * from './ai.js'
 export {
   newGame, applyPlayerAction, resolveTimeout, reorderHand, playerView,
   type PlayerAction, type Step, type GameResult, type PlayerView,
