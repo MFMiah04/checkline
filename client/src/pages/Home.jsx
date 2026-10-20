@@ -24,6 +24,11 @@ export default function Home() {
     localStorage.setItem('checkline_avatar', JSON.stringify(avatar))
   }, [avatar])
 
+  function handleSolo(difficulty) {
+    if (name.trim()) localStorage.setItem('checkline_name', name.trim())
+    navigate(`/solo?difficulty=${difficulty}`)
+  }
+
   function handleHost() {
     if (!name.trim()) return setError('Enter a name first.')
     const socket = getSocket()
@@ -89,8 +94,17 @@ export default function Home() {
 
       {mode === null && (
         <div className="home-buttons">
+          <button onClick={() => setMode('solo')}>Play vs Computer</button>
           <button onClick={() => setMode('host')}>Host Game</button>
           <button onClick={() => setMode('join')}>Join Game</button>
+        </div>
+      )}
+
+      {mode === 'solo' && (
+        <div className="home-buttons">
+          <button onClick={() => handleSolo('normal')}>Normal</button>
+          <button onClick={() => handleSolo('easy')}>Easy</button>
+          <button onClick={() => setMode(null)}>Back</button>
         </div>
       )}
 

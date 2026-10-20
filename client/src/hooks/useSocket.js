@@ -4,8 +4,15 @@ import { io } from 'socket.io-client'
 export const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
 let socket = null
+let localHost = null  // set during games against the computer
+
+// Routes the game screen's messages to an in-browser game instead of the server
+export function setLocalHost(host) {
+  localHost = host
+}
 
 export function getSocket() {
+  if (localHost) return localHost
   if (!socket) {
     socket = io(SERVER_URL, { autoConnect: false })
   }

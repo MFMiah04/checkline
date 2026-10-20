@@ -22,7 +22,8 @@ function emit(event, payload) {
   getSocket().emit(event, payload)
 }
 
-export default function Game() {
+// solo: playing the computer in the browser (see SoloGame); the player is always side 0
+export default function Game({ solo = false }) {
   const { code } = useParams()
   const navigate = useNavigate()
   const [state, setState]             = useState(null)
@@ -96,7 +97,7 @@ export default function Game() {
   const insertRevealedRef = useRef(false)
   const prevTurnRef       = useRef(null)
 
-  const side = parseInt(localStorage.getItem('checkline_side') ?? '0')
+  const side = solo ? 0 : parseInt(localStorage.getItem('checkline_side') ?? '0')
 
   useEffect(() => {
     const token = localStorage.getItem('checkline_token')
