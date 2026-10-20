@@ -14,6 +14,7 @@ import Modal from '../components/Modal'
 import RulesModal from '../components/RulesModal'
 import { isValidMove, isValidAttack, isPinned, isFatigued } from '@checkline/engine'
 import { getAttackRange } from '../utils/attackRange'
+import '../styles/game.css'
 
 const PLACEABLE   = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
 const INSTANT     = new Set(['Command', 'Disrupt'])
