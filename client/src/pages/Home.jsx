@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getSocket } from '../hooks/useSocket'
 import AvatarEditor from '../components/AvatarEditor'
 import RulesModal from '../components/RulesModal'
-import { DEFAULT_AVATAR } from '../components/Avatar'
+import { DEFAULT_AVATAR } from '../components/avatarOptions'
 
 export default function Home() {
   const [name, setName] = useState(() => localStorage.getItem('checkline_name') || '')

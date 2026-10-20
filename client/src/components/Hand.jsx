@@ -61,7 +61,7 @@ function HandCard({ card, i, fanCount, isSelected, isIntercepted, isReactionAvai
   )
 }
 
-export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx, interceptedIds, reactionIndices, isOpponent = false, onCardClick, onReorder, onDragEnd: onDragEndProp }) {
+export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx, interceptedIds, reactionIndices, onCardClick, onReorder, onDragEnd: onDragEndProp }) {
   const isDraggingRef = useRef(false)
   const currentOrderRef = useRef(null)
 

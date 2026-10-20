@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
@@ -14,14 +14,17 @@ export function getSocket() {
 
 export function useSocket(handlers) {
   const handlersRef = useRef(handlers)
-  handlersRef.current = handlers
+  // Keep the latest handlers without re-subscribing; refs are updated after render, not during it
+  useLayoutEffect(() => {
+    handlersRef.current = handlers
+  })
 
   useEffect(() => {
     const s = getSocket()
     if (!s.connected) s.connect()
 
     const entries = Object.entries(handlersRef.current)
-    for (const [event, fn] of entries) {
+    for (const [event] of entries) {
       s.on(event, (...args) => handlersRef.current[event]?.(...args))
     }
 

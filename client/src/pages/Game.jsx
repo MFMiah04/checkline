@@ -104,7 +104,7 @@ export default function Game() {
 
   // ── Reaction timer visual countdown ───────────────────────────────
   useEffect(() => {
-    if (!reactionWindowMode) { setReactionPct(100); reactionTimerRef.current = null; return }
+    if (!reactionWindowMode) return
     reactionTimerRef.current = {
       remainingMs: reactionWindowMode.ms,
       lastTime: Date.now(),
@@ -120,7 +120,12 @@ export default function Game() {
       ref.lastTime = now
       setReactionPct(ref.remainingMs / ref.totalMs * 100)
     }, 50)
-    return () => clearInterval(id)
+    // Runs when the window closes: stop the countdown and reset the bar for the next window
+    return () => {
+      clearInterval(id)
+      reactionTimerRef.current = null
+      setReactionPct(100)
+    }
   }, [reactionWindowMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -491,10 +496,8 @@ export default function Game() {
     ? state.board[selectedPiece.row]?.[selectedPiece.lane]?.type
     : null
 
-  const amInCheck = state.inCheck?.[side] ?? false
   const canCycleViaDiscard  = isMyTurn && inActions && liftedCard !== null && !reactionWindowMode && !enslaveMode && !bodyguardMode && state.actionsRemaining > 0
   const canShuffleIntoDeck  = isMyTurn && inActions && liftedCard !== null && !reactionWindowMode && !enslaveMode && !bodyguardMode
-  const actionsMax          = state.actionsMax ?? 2
   const nextPlayer          = 1 - state.currentTurn
   const myWillBeDisrupted   = state.disruptNextTurn && nextPlayer === side
   const oppWillBeDisrupted  = state.disruptNextTurn && nextPlayer !== side
@@ -905,7 +908,7 @@ if (!isMyTurn || !inActions || attackPending) return
         </div>
       )}
 <div className="opponent-area" ref={oppHandAreaRef}>
-        <Hand cards={displayOppHand} faceDown isOpponent />
+        <Hand cards={displayOppHand} faceDown />
       </div>
 
       {enslaveMode && (

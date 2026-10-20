@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getSocket, useSocket } from '../hooks/useSocket'
 import Avatar from '../components/Avatar'
-import { DEFAULT_AVATAR } from '../components/Avatar'
+import { DEFAULT_AVATAR } from '../components/avatarOptions'
 
 export default function Lobby() {
   const { code } = useParams()
@@ -13,7 +13,6 @@ export default function Lobby() {
 
   useEffect(() => {
     const socket = getSocket()
-    const name = localStorage.getItem('checkline_name') || 'Player'
 
     // Determine if we're host or guest based on whether we just created the room
     // The server will have emitted room_created or room_joined before navigating here
@@ -25,13 +24,13 @@ export default function Lobby() {
   }, [code])
 
   useSocket({
-    room_created({ code: roomCode }) {
+    room_created() {
       setIsHost(true)
       localStorage.setItem('checkline_side', '0')
       const myAvatar = (() => { try { return JSON.parse(localStorage.getItem('checkline_avatar')) || DEFAULT_AVATAR } catch { return DEFAULT_AVATAR } })()
       setPlayers([{ name: localStorage.getItem('checkline_name') || 'Host', side: 0, avatar: myAvatar }])
     },
-    room_joined({ code: roomCode, hostName, hostAvatar }) {
+    room_joined({ hostName, hostAvatar }) {
       setIsHost(false)
       localStorage.setItem('checkline_side', '1')
       const myAvatar = (() => { try { return JSON.parse(localStorage.getItem('checkline_avatar')) || DEFAULT_AVATAR } catch { return DEFAULT_AVATAR } })()

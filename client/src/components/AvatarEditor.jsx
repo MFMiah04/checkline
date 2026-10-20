@@ -1,4 +1,5 @@
-import Avatar, { FACE_COLORS, EYE_STYLES, MOUTH_STYLES, HATS } from './Avatar'
+import Avatar from './Avatar'
+import { FACE_COLORS, EYE_STYLES, MOUTH_STYLES, HATS } from './avatarOptions'
 
 const FEATURES = [
   { key: 'hat',        arr: HATS },
