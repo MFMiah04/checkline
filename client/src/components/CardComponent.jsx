@@ -45,15 +45,6 @@ const CARD_ART = {
   Intercept: '✕', Reversal: '↺',
 }
 
-// Corner badge abbreviation for non-piece cards
-const CARD_ABBREV = {
-  Reposition: 'Re', Swap: 'Sw', Command: 'Cm', Disrupt: 'Di', Dispel: 'Dp',
-  Purge: 'Pu', Return: 'Rt', Enslave: 'En',
-  Shield: 'Sh', Bodyguard: 'Bg', Protection: 'Pr',
-  Pin: 'Pi', Fatigue: 'Fa', Silence: 'Si',
-  Intercept: 'In', Reversal: 'Rv',
-}
-
 export default function CardComponent({ card, faceDown = false, selected = false, intercepted = false, reactionAvailable = false, onClick }) {
   if (faceDown) {
     return <div className="card face-down" />
@@ -63,32 +54,22 @@ export default function CardComponent({ card, faceDown = false, selected = false
   const isClickable = onClick && !intercepted
   const tooltip = TOOLTIP[card.type]
 
-  const pieceSymbol = PIECE_SYMBOLS[card.type]
-  const cornerText  = pieceSymbol ?? CARD_ABBREV[card.type] ?? card.type.slice(0, 2)
-  const centerArt   = pieceSymbol ?? CARD_ART[card.type] ?? card.type[0]
-  const isPiece     = !!pieceSymbol
+  const icon = PIECE_SYMBOLS[card.type] ?? CARD_ART[card.type] ?? card.type[0]
 
   return (
     <div
       className={`card ${category}${selected ? ' selected' : ''}${intercepted ? ' intercepted' : ''}${reactionAvailable ? ' reaction-available' : ''}${isClickable ? ' clickable' : ''}`}
       onClick={intercepted ? undefined : onClick}
     >
-      {/* Top-left corner badge */}
-      <div className="card-corner-tl">{cornerText}</div>
-
+      <div className="card-header">
+        <span className="card-header-icon">{icon}</span>
+        <span className="card-header-name">{card.type}</span>
+      </div>
       {intercepted && <span className="card-intercepted-label">Intercepted</span>}
-
-      {/* Center art */}
-      {isPiece
-        ? <span className="card-center-symbol">{centerArt}</span>
-        : <span className="card-center-art">{centerArt}</span>
-      }
-
-      <span className="card-name">{card.type}</span>
-
-      {/* Bottom-right corner badge (mirrored, rotated 180° via CSS) */}
-      <div className="card-corner-br">{cornerText}</div>
-
+      <div className="card-body">
+        <span className="card-center-art">{icon}</span>
+      </div>
+      {tooltip && <div className="card-description">{tooltip}</div>}
       {tooltip && <div className="card-tooltip">{tooltip}</div>}
     </div>
   )

@@ -347,7 +347,7 @@ button:disabled {
   color: #3a4a6a;
 }
 
-.pile-card {
+.pile-stack .pile-card {
   position: absolute;
   width: 80px;
   height: 112px;
@@ -466,14 +466,11 @@ button:disabled {
   background-color: rgba(239, 83, 80, 0.12);
 }
 
-/* ── Piece group (wraps board-card + status cards, enables enemy rotation) ── */
+/* ── Piece group (wraps board-card + status cards) ── */
 
 .piece-group {
   position: absolute;
   inset: 0;
-}
-.piece-group-enemy {
-  transform: rotate(180deg);
 }
 
 /* ── Board mini-card (piece displayed as card within cell) ──────── */
@@ -481,94 +478,84 @@ button:disabled {
 .board-card {
   position: absolute;
   width: 64px;
-  height: 90px;
-  top: 8px;
+  height: 85px;
+  top: 5px;
   left: 33px; /* (130-64)/2 */
-  background: linear-gradient(170deg, #16213e 0%, #1c2850 100%);
-  border: 1.5px solid #2a3a5c;
-  border-top-width: 3px;
-  border-top-color: #6a6a6a;
-  border-radius: 6px;
+  background: #e5e7eb;
+  border: 2px solid rgba(255,255,255,0.9);
+  border-radius: 5px;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 18px 4px;
+  overflow: hidden;
   pointer-events: none;
-  color: #c8d8ff;
 }
 
 .board-card.cant-act { opacity: 0.32; filter: grayscale(0.7); }
 
-.board-card-corner {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  background: #6a6a6a;
+.board-card-header {
+  flex-shrink: 0;
+  padding: 3px 5px;
+  font-size: 0.48rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #6b7280; /* piece header: grey */
+}
+
+.board-card-body {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1;
 }
-.board-card-corner.tl { top: 4px; left: 4px; }
-.board-card-corner.br { bottom: 4px; right: 4px; transform: rotate(180deg); }
 
 .board-card-symbol {
-  font-size: 1.6rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: white;
+  border: none;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
   line-height: 1;
+  padding-bottom: 3px;
+  color: #94a3b8; /* piece: grey */
 }
 
-.board-card-name {
-  font-size: 0.52rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  opacity: 0.8;
-}
+/* ── Board status card (buff/debuff placed on board) ── */
 
-/* ── Board status card (buff/debuff placed on board — same card design as hand, rotated 90°) ── */
-
-/* Overrides card's size/position and adds landscape rotation to match board-card scale (64×90) */
 .board-status-card {
   position: absolute;
   width: 64px;
-  height: 90px;
-  left: 33px; /* (130 - 64) / 2, same as board-card */
-  padding: 16px 4px;
-  transform: rotate(90deg);
+  height: 85px;
+  left: 33px; /* (130 - 64) / 2 */
+  background: #e5e7eb;
+  border: 2px solid rgba(255,255,255,0.9);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   pointer-events: none;
 }
 
-/* Scale corner badges down to match board-card-corner size */
-.board-status-card .card-corner-tl,
-.board-status-card .card-corner-br {
-  width: 14px;
-  height: 14px;
-  top: 4px;
-  left: 4px;
-  font-size: 8px;
-}
-.board-status-card .card-corner-br {
-  top: auto;
-  left: auto;
-  bottom: 4px;
-  right: 4px;
-}
+/* First placed: sits on top of piece, piece header visible above it */
+.board-status-card.status-first  { top: 23px; z-index: 2; }
+/* Second placed: sits on top of first, first header visible above it */
+.board-status-card.status-second { top: 41px; z-index: 3; }
 
-.board-status-card .card-center-art { font-size: 1.05rem; }
-.board-status-card .card-name       { font-size: 0.52rem; }
+/* Buff: green body + header + icon */
+.board-status-card.buff-status   { background: #dcfce7; }
+.board-status-card.buff-status .board-card-header { background: #16a34a; }
+.board-status-card.buff-status .board-card-symbol  { color: #16a34a; }
 
-/* First placed: lower position (z=2). 64×90 rotated → visual 90×64, center_y = T+45, visual_top = T+13 */
-/* T=45 → visual y=58 to y=122 */
-.board-status-card.status-first  { top: 45px; z-index: 2; }
-
-/* Second placed: higher position (z=3). T=13 → visual y=26 to y=90 */
-.board-status-card.status-second { top: 13px; z-index: 3; }
+/* Debuff: red body + header + icon */
+.board-status-card.debuff-status { background: #fee2e2; }
+.board-status-card.debuff-status .board-card-header { background: #dc2626; }
+.board-status-card.debuff-status .board-card-symbol  { color: #dc2626; }
 
 /* Ghost origin cell: fade piece-group (board-card + status cards) */
 .board-space.floating-origin .piece-group {
@@ -659,19 +646,15 @@ button:disabled {
 .card {
   width: 80px;
   height: 112px;
-  background: linear-gradient(170deg, #16213e 0%, #1c2850 100%);
-  border: 1.5px solid #2a3a5c;
+  border: 3px solid rgba(255,255,255,0.9);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 24px 6px;
-  text-align: center;
+  overflow: hidden;
   position: relative;
   transition: border-color 0.1s, transform 0.1s;
-  border-top-width: 3px;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .card.clickable {
@@ -684,13 +667,15 @@ button:disabled {
 
 .card.selected {
   border-color: #7c83fd;
-  background: #1e2a54;
+  box-shadow: 0 0 0 1px #7c83fd;
   transform: translateY(-6px);
 }
 
 .card.face-down {
-  background: #0e1930;
-  border-color: #1a2a45;
+  background: repeating-linear-gradient(
+    45deg, #121e38, #121e38 4px, #162244 4px, #162244 8px
+  );
+  border-color: #1e2d4a;
 }
 
 .card.reaction-available {
@@ -711,47 +696,93 @@ button:disabled {
   border-top-color: rgba(255, 107, 107, 0.6) !important;
 }
 
-/* ── Card corner badges (top-left + bottom-right, like playing cards) ── */
+/* ── Card header (icon + name strip at top) ──────────────────────── */
 
-.card-corner-tl,
-.card-corner-br {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+.card-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+}
+
+.card-header-icon {
+  font-size: 0.75rem;
+  line-height: 1;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.card-header-name {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card.piece    .card-header { background: #6b7280; }
+.card.buff     .card-header { background: #16a34a; }
+.card.debuff   .card-header { background: #dc2626; }
+.card.control  .card-header { background: #0891b2; }
+.card.reaction .card-header { background: #d97706; }
+
+.card.piece    { background: #e5e7eb; }
+.card.buff     { background: #dcfce7; }
+.card.debuff   { background: #fee2e2; }
+.card.control  { background: #cffafe; }
+.card.reaction { background: #fef3c7; }
+
+/* ── Card body (centers the icon circle) ────────────────────────── */
+
+.card-body {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1;
+  padding: 6px 0;
 }
-.card-corner-tl { top: 6px; left: 6px; }
-.card-corner-br { bottom: 6px; right: 6px; transform: rotate(180deg); }
 
-.card.piece    .card-corner-tl, .card.piece    .card-corner-br { background: #6a6a6a; }
-.card.control  .card-corner-tl, .card.control  .card-corner-br { background: #2d8db5; }
-.card.buff     .card-corner-tl, .card.buff     .card-corner-br { background: #4a8a4d; }
-.card.debuff   .card-corner-tl, .card.debuff   .card-corner-br { background: #a04040; }
-.card.reaction .card-corner-tl, .card.reaction .card-corner-br { background: #a08000; }
-
-/* ── Card center art / name ─────────────────────────────────────── */
-
-.card-center-symbol {
-  font-size: 2.4rem;
-  line-height: 1;
-}
+/* ── Card center art (white circle with type-colored icon) ─────── */
 
 .card-center-art {
-  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: white;
+  border: none;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
   line-height: 1;
-  opacity: 0.85;
+  padding-bottom: 4px;
+}
+
+.card.piece    .card-center-art { color: #94a3b8; }
+.card.buff     .card-center-art { color: #16a34a; }
+.card.debuff   .card-center-art { color: #dc2626; }
+.card.control  .card-center-art { color: #0891b2; }
+.card.reaction .card-center-art { color: #d97706; }
+
+/* ── Card description (inline text at bottom) ───────────────────── */
+
+.card-description {
+  flex-shrink: 0;
+  padding: 3px 5px 5px;
+  font-size: 0.38rem;
+  color: #000;
+  line-height: 1.3;
+  background: transparent;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .card-intercepted-label {
   position: absolute;
-  top: 28px;
+  top: 30px;
   left: 0;
   right: 0;
   text-align: center;
@@ -760,13 +791,6 @@ button:disabled {
   color: #ff6b6b;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-.card-name {
-  font-size: 0.66rem;
-  font-weight: 600;
-  color: #c8d8ff;
-  margin-top: 1px;
 }
 
 .card-tooltip {
@@ -974,12 +998,6 @@ button:disabled {
   animation: drain linear forwards;
 }
 
-/* Category colour on the top border */
-.card.piece    { border-top-color: #aaaaaa; }
-.card.control  { border-top-color: #4fc3f7; }
-.card.buff     { border-top-color: #81c784; }
-.card.debuff   { border-top-color: #e57373; }
-.card.reaction { border-top-color: #ffd54f; }
 
 /* ── Reaction window banner ──────────────────────────────────────────── */
 
@@ -1139,7 +1157,7 @@ button:disabled {
 /* Highlight the board-card when it's floating */
 .floating-board-wrapper .board-card {
   border-color: rgba(124, 131, 253, 0.6);
-  border-top-color: #7c83fd;
+  box-shadow: 0 0 6px rgba(124, 131, 253, 0.4);
 }
 
 /* Hand card (portrait or landscape): fills cell, centers card within */
@@ -1154,9 +1172,9 @@ button:disabled {
   filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
 }
 
-/* Buff/debuff hand card floating preview: landscape via rotation */
-.floating-landscape {
-  transform: rotate(90deg);
+/* Buff/debuff hand card floating preview: board-style portrait card */
+.floating-status-preview {
+  position: relative;
 }
 
 /* ── Confirm target pulse ─────────────────────────────────────────────── */

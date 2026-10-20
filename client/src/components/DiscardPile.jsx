@@ -2,6 +2,14 @@ import { useEffect, useRef } from 'react'
 
 const SYMBOLS = { King: '♚', Queen: '♛', Rook: '♜', Bishop: '♝', Knight: '♞', Pawn: '♟' }
 
+const CARD_ART = {
+  Reposition: '→', Swap: '⇄', Command: '+', Disrupt: '⊗', Dispel: '×',
+  Purge: '⊛', Return: '↩', Enslave: '∞',
+  Shield: '◉', Bodyguard: '◈', Protection: '◇',
+  Pin: '⊘', Fatigue: '⏸', Silence: '∅',
+  Intercept: '✕', Reversal: '↺',
+}
+
 const CATEGORY = {
   Pawn: 'piece', Knight: 'piece', Bishop: 'piece',
   Rook: 'piece', Queen: 'piece', King: 'piece',
@@ -73,8 +81,18 @@ export default function DiscardPile({
             {count > 2 && <div className="card face-down pile-card pile-card-3" />}
             {count > 1 && <div className="card face-down pile-card pile-card-2" />}
             <div className={`card ${category} pile-card pile-card-1`}>
-              <span className="card-name">{viewCard?.type}</span>
-              <span className="card-category">{category}</span>
+              {(() => {
+                const icon = SYMBOLS[viewCard?.type] ?? CARD_ART[viewCard?.type] ?? viewCard?.type?.[0]
+                return (<>
+                  <div className="card-header">
+                    <span className="card-header-icon">{icon}</span>
+                    <span className="card-header-name">{viewCard?.type}</span>
+                  </div>
+                  <div className="card-body">
+                    <span className="card-center-art">{icon}</span>
+                  </div>
+                </>)
+              })()}
               {viewIndex > 0 && (
                 <span className="pile-browse-idx">{viewIndex + 1}/{count}</span>
               )}

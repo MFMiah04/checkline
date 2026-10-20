@@ -12,14 +12,6 @@ const CARD_ART = {
   Intercept: '✕', Reversal: '↺',
 }
 
-const CARD_ABBREV = {
-  Reposition: 'Re', Swap: 'Sw', Command: 'Cm', Disrupt: 'Di', Dispel: 'Dp',
-  Purge: 'Pu', Return: 'Rt', Enslave: 'En',
-  Shield: 'Sh', Bodyguard: 'Bg', Protection: 'Pr',
-  Pin: 'Pi', Fatigue: 'Fa', Silence: 'Si',
-  Intercept: 'In', Reversal: 'Rv',
-}
-
 const CATEGORY = {
   Pawn: 'piece', Knight: 'piece', Bishop: 'piece',
   Rook: 'piece', Queen: 'piece', King: 'piece',
@@ -57,15 +49,12 @@ function getStatusPos(piece, which) {
 }
 
 function StatusCard({ status, posClass, colorClass }) {
-  const cornerText = CARD_ABBREV[status.type] ?? status.type.slice(0, 2)
-  const centerArt  = CARD_ART[status.type] ?? status.type[0]
-  const category   = colorClass === 'buff-status' ? 'buff' : 'debuff'
   return (
-    <div className={`card ${category} board-status-card ${posClass}`}>
-      <div className="card-corner-tl">{cornerText}</div>
-      <span className="card-center-art">{centerArt}</span>
-      <span className="card-name">{status.type}</span>
-      <div className="card-corner-br">{cornerText}</div>
+    <div className={`board-status-card ${colorClass} ${posClass}`}>
+      <div className="board-card-header">{status.type}</div>
+      <div className="board-card-body">
+        <span className="board-card-symbol">{CARD_ART[status.type] ?? status.type[0]}</span>
+      </div>
     </div>
   )
 }
@@ -124,13 +113,12 @@ export default function BoardSpace({
 
       {renderPiece && (
         <>
-          {/* piece-group rotates 180° for enemy pieces */}
-          <div className={`piece-group${isOwnPiece ? '' : ' piece-group-enemy'}`}>
+          <div className="piece-group">
             <div className={`board-card${cantAct ? ' cant-act' : ''}`}>
-              <div className="board-card-corner tl">{SYMBOLS[piece.type] ?? piece.type[0]}</div>
-              <span className="board-card-symbol">{SYMBOLS[piece.type] ?? piece.type[0]}</span>
-              <span className="board-card-name">{piece.type}</span>
-              <div className="board-card-corner br">{SYMBOLS[piece.type] ?? piece.type[0]}</div>
+              <div className="board-card-header">{piece.type}</div>
+              <div className="board-card-body">
+                <span className="board-card-symbol">{SYMBOLS[piece.type] ?? piece.type[0]}</span>
+              </div>
             </div>
             {piece.buff && (
               <StatusCard
@@ -161,18 +149,17 @@ export default function BoardSpace({
       <AnimatePresence>
         {isFloatingTarget && floatingCard && (() => {
           const isHandCard = 'id' in floatingCard
-          const isEnemy = floatingCard.owner !== side
 
           if (!isHandCard) {
             // Board piece being moved — show full piece-group with status cards
             return (
               <motion.div {...sharedMotionProps} className="floating-board-wrapper">
-                <div className={`piece-group${isEnemy ? ' piece-group-enemy' : ''}`}>
+                <div className="piece-group">
                   <div className="board-card floating-piece-highlight">
-                    <div className="board-card-corner tl">{SYMBOLS[floatingCard.type] ?? floatingCard.type[0]}</div>
-                    <span className="board-card-symbol">{SYMBOLS[floatingCard.type] ?? floatingCard.type[0]}</span>
-                    <span className="board-card-name">{floatingCard.type}</span>
-                    <div className="board-card-corner br">{SYMBOLS[floatingCard.type] ?? floatingCard.type[0]}</div>
+                    <div className="board-card-header">{floatingCard.type}</div>
+                    <div className="board-card-body">
+                      <span className="board-card-symbol">{SYMBOLS[floatingCard.type] ?? floatingCard.type[0]}</span>
+                    </div>
                   </div>
                   {floatingCard.buff && (
                     <StatusCard
@@ -195,17 +182,15 @@ export default function BoardSpace({
           }
 
           if (BUFF_DEBUFF_TYPES.has(floatingCard.type)) {
-            // Buff/debuff hand card — show in landscape orientation (same card design, rotated)
+            // Buff/debuff hand card — preview as board-style card (portrait, same as when placed)
             const isBuff = CATEGORY[floatingCard.type] === 'buff'
-            const cornerText = CARD_ABBREV[floatingCard.type] ?? floatingCard.type.slice(0, 2)
-            const centerArt  = CARD_ART[floatingCard.type] ?? floatingCard.type[0]
             return (
               <motion.div {...sharedMotionProps} className="floating-hand-wrapper">
-                <div className={`card ${isBuff ? 'buff' : 'debuff'} floating-landscape`}>
-                  <div className="card-corner-tl">{cornerText}</div>
-                  <span className="card-center-art">{centerArt}</span>
-                  <span className="card-name">{floatingCard.type}</span>
-                  <div className="card-corner-br">{cornerText}</div>
+                <div className={`board-status-card ${isBuff ? 'buff-status' : 'debuff-status'} floating-status-preview`}>
+                  <div className="board-card-header">{floatingCard.type}</div>
+                  <div className="board-card-body">
+                    <span className="board-card-symbol">{CARD_ART[floatingCard.type] ?? floatingCard.type[0]}</span>
+                  </div>
                 </div>
                 {errorTip && <div className="floating-error-tip">{errorTip}</div>}
               </motion.div>
@@ -213,21 +198,18 @@ export default function BoardSpace({
           }
 
           // Other hand card (piece/control/reaction) — show portrait with full hand card design
-          const pieceSymbol = SYMBOLS[floatingCard.type]
-          const cornerText = pieceSymbol ?? CARD_ABBREV[floatingCard.type] ?? floatingCard.type.slice(0, 2)
-          const centerArt  = pieceSymbol ?? CARD_ART[floatingCard.type] ?? floatingCard.type[0]
-          const isPiece    = !!pieceSymbol
-          const category   = CATEGORY[floatingCard.type] ?? ''
+          const icon     = SYMBOLS[floatingCard.type] ?? CARD_ART[floatingCard.type] ?? floatingCard.type[0]
+          const category = CATEGORY[floatingCard.type] ?? ''
           return (
             <motion.div {...sharedMotionProps} className="floating-hand-wrapper">
               <div className={`card ${category}`}>
-                <div className="card-corner-tl">{cornerText}</div>
-                {isPiece
-                  ? <span className="card-center-symbol">{centerArt}</span>
-                  : <span className="card-center-art">{centerArt}</span>
-                }
-                <span className="card-name">{floatingCard.type}</span>
-                <div className="card-corner-br">{cornerText}</div>
+                <div className="card-header">
+                  <span className="card-header-icon">{icon}</span>
+                  <span className="card-header-name">{floatingCard.type}</span>
+                </div>
+                <div className="card-body">
+                  <span className="card-center-art">{icon}</span>
+                </div>
               </div>
               {errorTip && <div className="floating-error-tip">{errorTip}</div>}
             </motion.div>
