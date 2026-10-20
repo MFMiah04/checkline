@@ -1,83 +1,67 @@
+import { ALL_CARD_TYPES, cardInfo } from '@checkline/engine'
+import Modal from './Modal'
+import Icon from './Icon'
+
 const RULES = [
-  { title: 'OBJECTIVE', lines: [
-    "Checkmate your opponent's King — if they cannot escape Check before their turn ends, they lose.",
-  ]},
-  { title: 'BOARD', lines: [
-    '5 lanes × 4 rows. Each player owns the 2 rows on their side. One piece per space.',
-  ]},
-  { title: 'SETUP', lines: [
-    'Each player places their King centre-back. Draw 5 cards. Mulligan (redraw) any number once, then a random player goes first.',
-  ]},
-  { title: 'TURN ORDER', lines: [
-    '1. Draw 1 card.',
-    '2. Take up to 2 actions (see below).',
-    '3. If in Check, you must remove it before ending your turn.',
-    '4. Discard down to 5 cards.',
-  ]},
-  { title: 'ACTIONS (2 per turn)', lines: [
-    'Place — put a piece card onto any empty space on your side.',
-    'Direct — move, attack, or sacrifice a placed piece (not the turn it was placed).',
-    'Play — play a Control, Buff, or Debuff card.',
-    'Cycle — discard 1 card, draw 1 card.',
-    'Command and Disrupt are free — each may be played once per turn without spending an action.',
-  ]},
-  { title: 'MOVEMENT & ATTACKS', lines: [
-    'Pieces move only on your side. Attacks reach anywhere on the board; the piece does not move.',
-    'Attacked pieces go to the discard pile. Pieces block attacks that pass through their space.',
-  ]},
-  { title: 'SACRIFICES', lines: [
-    'Sacrifice a piece on your side to draw cards: Pawn=1, Knight/Bishop/Rook=2, Queen=3.',
-  ]},
-  { title: 'CHECK', lines: [
-    "Your King is in Check when an opponent's piece can attack it.",
-    'Remove Check by: moving the King, blocking the line, destroying or Fatiguing the attacker, or using a Bodyguard.',
-  ]},
-  { title: 'REACTIONS', lines: [
-    'When your opponent acts, a reaction window opens. Hover your hand to slow the timer and reveal available reactions. You may play 1 reaction before the action resolves.',
-    'Intercept — cancel the action entirely.',
-    'Reversal — redirect a Buff or Debuff to a different valid target.',
-    'Reactions cannot block actions that remove the King from Check.',
-  ]},
-  { title: 'PIECES', lines: [
-    'King — moves/attacks 1 space in any direction.',
-    'Pawn — moves forward 1; attacks diagonally forward 1.',
-    'Knight — L-shape (2+1); jumps over pieces.',
-    'Bishop — diagonal, any distance.',
-    'Rook — horizontal or vertical, any distance.',
-    'Queen — any direction, any distance.',
-  ]},
-  { title: 'BUFFS (attach to any non-King piece; max 1 per piece)', lines: [
-    'Enslave — on capture, place the enemy piece on your side instead of discarding.',
-    'Shield — absorbs the next attack instead of the piece.',
-    'Bodyguard — a friendly orthogonally adjacent piece (not diagonal) sacrifices itself to cancel an attack on this piece.',
-    'Protection — removes existing Debuff; piece cannot receive Debuffs while active.',
-  ]},
-  { title: 'DEBUFFS (attach to opponent non-King pieces; max 1 per piece)', lines: [
-    'Pin — piece cannot move.',
-    'Fatigue — piece cannot attack.',
-    'Silence — removes existing Buff; piece cannot receive Buffs while active.',
-  ]},
+  ['Goal', [
+    "Checkmate your opponent's King: if their King is still in check when their turn ends, they lose.",
+  ]],
+  ['Board', [
+    'The board has 5 lanes and 4 rows. You own the 2 rows on your side. One piece per square.',
+  ]],
+  ['Setup', [
+    'Each King starts in the middle of its back row. Both players draw 5 cards, may swap any of them once (the mulligan), and a random player goes first.',
+  ]],
+  ['Your turn', [
+    'Draw 1 card, then take 2 actions.',
+    'Actions: place a piece card on your side; move, attack with or sacrifice a piece already on the board (not on the turn it arrived); play a Control, Buff or Debuff card; or cycle (discard a card to draw one).',
+    'Command and Disrupt are free and can each be played once per turn.',
+    'If your King is in check, get it out before your turn ends. Then discard down to 5 cards.',
+  ]],
+  ['Moving and attacking', [
+    'Pieces only move on your side, but attacks reach the whole board. The attacker stays where it is and the captured piece is discarded.',
+    'Every piece blocks attacks through its square, except that Knights jump.',
+    'Sacrifice a piece to draw cards: Pawn 1, Knight, Bishop or Rook 2, Queen 3.',
+  ]],
+  ['Check', [
+    "Your King is in check when an opponent's piece can attack it.",
+    'Get out of check by moving the King, blocking the line, removing or Fatiguing the attacker, or having a Bodyguard next to your King.',
+  ]],
+  ['Buffs, Debuffs and reactions', [
+    "Buffs and Debuffs go on any piece except a King, yours or your opponent's. Each piece holds at most one of each.",
+    'When your opponent acts, a reaction window may open. Play one reaction before the action happens, or let it through. Actions that get a King out of check cannot be reacted to.',
+  ]],
 ]
 
 export default function RulesModal({ onClose }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-dialog modal-dialog--rules" onClick={e => e.stopPropagation()}>
-        <div className="modal-title">
-          Rules
-          <button className="modal-close-btn" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-rules-body">
-          {RULES.map(section => (
-            <div key={section.title} className="modal-rules-section">
-              <div className="modal-rules-section-title">{section.title}</div>
-              {section.lines.map((line, i) => (
-                <div key={i}>{line}</div>
-              ))}
-            </div>
-          ))}
-        </div>
+    <Modal title="Rules" onClose={onClose} className="modal-dialog--rules">
+      <button className="modal-close-btn" onClick={onClose} aria-label="Close rules">×</button>
+      <div className="modal-rules-body">
+        {RULES.map(([title, lines]) => (
+          <section key={title}>
+            <h3 className="modal-rules-section-title">{title}</h3>
+            {lines.map(line => <p key={line}>{line}</p>)}
+          </section>
+        ))}
+        <section>
+          <h3 className="modal-rules-section-title">Cards</h3>
+          <ul className="rules-cards">
+            {ALL_CARD_TYPES.map(type => {
+              const info = cardInfo(type)
+              return (
+                <li key={type}>
+                  <span className={`rules-card-icon type-${info.category}`}><Icon name={type} size={30} /></span>
+                  <div>
+                    <strong>{info.name}</strong> <span className="rules-card-type">{info.category}{info.cost === 'free' ? ', free' : ''}</span>
+                    <p>{info.text}</p>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
       </div>
-    </div>
+    </Modal>
   )
 }
