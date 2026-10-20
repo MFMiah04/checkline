@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSocket } from '../hooks/useSocket'
+import { useServerStatus } from '../hooks/useServerStatus'
 import AvatarEditor from '../components/AvatarEditor'
 import RulesModal from '../components/RulesModal'
 import { DEFAULT_AVATAR } from '../components/avatarOptions'
@@ -16,6 +17,8 @@ export default function Home() {
   const [error, setError] = useState('')
   const [rulesOpen, setRulesOpen] = useState(false)
   const navigate = useNavigate()
+  const { status: serverStatus, retry: retryServer } = useServerStatus()
+  const serverReady = serverStatus === 'ready'
 
   useEffect(() => {
     localStorage.setItem('checkline_avatar', JSON.stringify(avatar))
@@ -64,10 +67,25 @@ export default function Home() {
         maxLength={20}
         value={name}
         onChange={e => { setName(e.target.value); setError('') }}
-        onKeyDown={e => e.key === 'Enter' && mode === 'join' && handleJoin()}
+        onKeyDown={e => e.key === 'Enter' && mode === 'join' && serverReady && handleJoin()}
       />
 
       {error && <p className="error">{error}</p>}
+
+      <div className="server-status" role="status" aria-live="polite">
+        {serverStatus === 'waking' && (
+          <p>
+            <span className="server-status-spinner" aria-hidden="true" />
+            Waking up the game server. This can take up to a minute because it runs on a free host.
+          </p>
+        )}
+        {serverStatus === 'offline' && (
+          <p className="error">
+            Can't reach the game server.{' '}
+            <button className="btn-rules-link" onClick={retryServer}>Try again</button>
+          </p>
+        )}
+      </div>
 
       {mode === null && (
         <div className="home-buttons">
@@ -78,7 +96,7 @@ export default function Home() {
 
       {mode === 'host' && (
         <div className="home-buttons">
-          <button onClick={handleHost}>Create Room</button>
+          <button onClick={handleHost} disabled={!serverReady}>Create Room</button>
           <button onClick={() => setMode(null)}>Back</button>
         </div>
       )}
@@ -91,9 +109,9 @@ export default function Home() {
             maxLength={4}
             value={joinCode}
             onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError('') }}
-            onKeyDown={e => e.key === 'Enter' && handleJoin()}
+            onKeyDown={e => e.key === 'Enter' && serverReady && handleJoin()}
           />
-          <button onClick={handleJoin}>Join</button>
+          <button onClick={handleJoin} disabled={!serverReady}>Join</button>
           <button onClick={() => setMode(null)}>Back</button>
         </div>
       )}

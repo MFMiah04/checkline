@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
+export const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
 let socket = null
 

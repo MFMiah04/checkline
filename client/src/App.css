@@ -76,6 +76,33 @@ button:disabled {
   gap: 0.6rem;
 }
 
+.server-status p {
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+.server-status-spinner {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 0.5em;
+  vertical-align: -0.05em;
+  border: 2px solid #7c83fd;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: server-status-spin 0.8s linear infinite;
+}
+
+@keyframes server-status-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .server-status-spinner { animation: none; }
+}
+
 /* Lobby */
 .lobby {
   width: 360px;
