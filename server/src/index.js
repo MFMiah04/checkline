@@ -7,7 +7,7 @@ import {
   getRoomBySocket, removeRoom, updateSocketId
 } from './rooms.js'
 import { initGameState, startTurn, projectState } from './game/gameState.js'
-import { drawCard } from './game/deck.js'
+import { drawCard } from '@checkline/engine'
 import {
   applyPlace, applyDirectMove, applyDirectAttack, applyDirectSacrifice,
   applyCycle, applyCommand, applyDisrupt, applyEndTurn,
@@ -15,7 +15,7 @@ import {
   applyDispel, applyReturn, applyPurge,
   resolveCapture, discardToken
 } from './game/actions.js'
-import { findKing, isInCheck, isValidBuffTarget, isValidDebuffTarget, isCheckRemovalAction, hasBodyguardAdjacentToKing, isPinned, isFatigued, isValidMove, isValidAttack } from './game/rules.js'
+import { findKing, isInCheck, isValidBuffTarget, isValidDebuffTarget, isCheckRemovalAction, hasBodyguardAdjacentToKing, isPinned, isFatigued, isValidMove, isValidAttack } from '@checkline/engine'
 
 const app = express()
 app.use(cors())
@@ -354,7 +354,7 @@ io.on('connection', socket => {
 
     // Draw replacements
     for (let i = 0; i < removed.length; i++) {
-      const card = drawCard(room.deck, room.discardPile)
+      const card = drawCard(room.deck, room.discardPile, Math.random)
       if (card) player.hand.push(card)
     }
 

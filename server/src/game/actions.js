@@ -4,10 +4,10 @@ import {
   isPinned, isFatigued, findKing, isInCheck, hasLegalCheckRemoval,
   hasBodyguardAdjacentToKing,
   getBodyguardOptions
-} from './rules.js'
-import { drawCard } from './deck.js'
+} from '@checkline/engine'
+import { drawCard } from '@checkline/engine'
 import { startTurn } from './gameState.js'
-import { PIECE_TYPES } from './cards.js'
+import { PIECE_TYPES } from '@checkline/engine'
 
 const BUFF_TYPES   = new Set(['Enslave', 'Shield', 'Bodyguard', 'Protection'])
 const DEBUFF_TYPES = new Set(['Pin', 'Fatigue', 'Silence'])
@@ -179,7 +179,7 @@ export function applyDirectSacrifice(room, player, { row, lane }) {
   room.board[row][lane] = null
 
   for (let i = 0; i < drawCount; i++) {
-    const card = drawCard(room.deck, room.discardPile)
+    const card = drawCard(room.deck, room.discardPile, Math.random)
     if (card) player.hand.push(card)
   }
 
@@ -197,7 +197,7 @@ export function applyCycle(room, player, { cardIndex }) {
   const [discarded] = player.hand.splice(cardIndex, 1)
   room.discardPile.unshift(discarded)
 
-  const card = drawCard(room.deck, room.discardPile)
+  const card = drawCard(room.deck, room.discardPile, Math.random)
   if (card) player.hand.push(card)
 
   spendAction(room, player)

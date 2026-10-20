@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/npm-debug.log
+**/.env
+**/.env.local
+.git
+.github
+client
+**/*.test.js
+**/*.test.ts
+**/testHelpers.js
+**/testHelpers.ts
+server/Dockerfile
+.dockerignore

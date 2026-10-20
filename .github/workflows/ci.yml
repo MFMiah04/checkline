@@ -5,20 +5,19 @@ on:
   pull_request:
 
 jobs:
-  server-tests:
-    name: Server tests
+  engine-and-server:
+    name: Engine and server
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: server/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
       - run: npm test
 
   client-build:
@@ -43,4 +42,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: docker build -t checkline-server ./server
+      - run: docker build -f server/Dockerfile -t checkline-server .

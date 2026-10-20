@@ -1,0 +1,16 @@
+{
+  "name": "checkline",
+  "private": true,
+  "workspaces": [
+    "engine",
+    "server"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace engine",
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspace engine"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

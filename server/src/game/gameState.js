@@ -1,8 +1,7 @@
-import { createDeck, drawCard } from './deck.js'
-import { findKing, isInCheck } from './rules.js'
+import { createDeck, drawCard, findKing, isInCheck } from '@checkline/engine'
 
 export function initGameState(room) {
-  const deck = createDeck()
+  const deck = createDeck(Math.random)
   const discardPile = []
 
   // Deal 5 cards to each player
@@ -10,7 +9,7 @@ export function initGameState(room) {
     player.hand = []
     player.mulliganDone = false
     for (let i = 0; i < 5; i++) {
-      const card = drawCard(deck, discardPile)
+      const card = drawCard(deck, discardPile, Math.random)
       if (card) player.hand.push(card)
     }
   }
@@ -63,7 +62,7 @@ export function startTurn(room) {
 
   // Auto-draw for the current player
   const currentPlayer = room.players[room.currentTurn]
-  const card = drawCard(room.deck, room.discardPile)
+  const card = drawCard(room.deck, room.discardPile, Math.random)
   if (card) currentPlayer.hand.push(card)
 
   // Reset canActThisTurn for all pieces owned by current player

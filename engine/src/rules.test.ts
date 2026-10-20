@@ -4,12 +4,13 @@ import {
   isValidBuffTarget, isValidDebuffTarget,
 } from './rules.js'
 import { emptyBoard, piece, buffed, debuffed } from './testHelpers.js'
+import type { Board, Piece } from './types.js'
 
-let board
+let board: Board
 beforeEach(() => { board = emptyBoard() })
 
 // Put a piece on the board and return it, for calls like isValidMove(board, p, ...)
-function put(row, lane, p) {
+function put(row: number, lane: number, p: Piece): Piece {
   board[row][lane] = p
   return p
 }
