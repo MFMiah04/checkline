@@ -1,4 +1,5 @@
-// In-memory room store
+// In-memory room store. A room holds connection details for its two players;
+// the game itself is an engine GameState in room.game (null while in the lobby).
 const rooms = new Map()  // code → room
 
 function generateCode() {
@@ -20,9 +21,15 @@ export function createRoom(hostSocket, hostName, hostToken, hostAvatar) {
   const code = generateCode()
   const room = {
     code,
-    phase: 'lobby',
+    phase: 'lobby',  // 'lobby' until the host starts, then 'game'
+    game: null,
+    playAgainVotes: new Set(),
+    discardViewIndex: 0,
+    reactionExpiresAt: null,
+    reactionFrozen: false,
+    bodyguardExpiresAt: null,
     players: [
-      { socketId: hostSocket.id, sessionToken: hostToken, name: hostName, avatar: sanitizeAvatar(hostAvatar), side: 0, hand: [], mulliganDone: false, connected: true }
+      { socketId: hostSocket.id, sessionToken: hostToken, name: hostName, avatar: sanitizeAvatar(hostAvatar), side: 0, connected: true, handHovered: false }
     ],
   }
   rooms.set(code, room)
@@ -46,9 +53,8 @@ export function joinRoom(code, guestSocket, guestName, guestToken, guestAvatar) 
     name: guestName,
     avatar: sanitizeAvatar(guestAvatar),
     side: 1,
-    hand: [],
-    mulliganDone: false,
-    connected: true
+    connected: true,
+    handHovered: false
   })
   return { room }
 }
