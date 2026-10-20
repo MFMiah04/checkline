@@ -12,6 +12,7 @@ export interface PlayerState {
 
 // Extra details shown to the opponent when an action is announced in a reaction window
 export interface RevealedAction {
+  cardId?: number  // the card being played, so screens can animate it out of the hand
   pieceType?: PieceType
   targetType?: PieceType
   effectType?: string

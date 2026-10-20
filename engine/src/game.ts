@@ -268,17 +268,18 @@ function resolveTurnAction(s: GameState, side: Side, action: Action, random: Ran
 function describeAction(s: GameState, side: Side, action: Action): RevealedAction {
   const at = (row: number, lane: number) => s.board[row]?.[lane] ?? null
   const card = 'cardIndex' in action ? s.players[side].hand[action.cardIndex] : undefined
+  const cardId = card ? { cardId: card.id } : {}
   switch (action.type) {
-    case 'place':            return { pieceType: card?.type as RevealedAction['pieceType'] }
+    case 'place':            return { ...cardId, pieceType: card?.type as RevealedAction['pieceType'] }
     case 'direct_move':
     case 'direct_sacrifice': return { pieceType: at(action.row, action.lane)?.type }
     case 'direct_attack':    return { pieceType: at(action.row, action.lane)?.type, targetType: at(action.targetRow, action.targetLane)?.type }
     case 'play_buff':
-    case 'play_debuff':      return { targetType: at(action.targetRow, action.targetLane)?.type, effectType: card?.type }
+    case 'play_debuff':      return { ...cardId, targetType: at(action.targetRow, action.targetLane)?.type, effectType: card?.type }
     case 'play_reposition':
-    case 'play_return':      return { pieceType: at(action.pieceRow, action.pieceLane)?.type }
-    case 'play_dispel':      return { targetType: at(action.targetRow, action.targetLane)?.type }
-    default:                 return {}
+    case 'play_return':      return { ...cardId, pieceType: at(action.pieceRow, action.pieceLane)?.type }
+    case 'play_dispel':      return { ...cardId, targetType: at(action.targetRow, action.targetLane)?.type }
+    default:                 return cardId
   }
 }
 

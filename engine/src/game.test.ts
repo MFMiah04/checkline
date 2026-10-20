@@ -91,12 +91,14 @@ describe('reaction window', () => {
     game.players[0].hand = cards('Rook')
 
     const announced = play(game, 0, { type: 'place', cardIndex: 0, row: 1, lane: 0 }).state
-    expect(announced.pending).toMatchObject({ kind: 'reaction', actorSide: 0, revealed: { pieceType: 'Rook' } })
+    const rookId = game.players[0].hand[0].id
+    expect(announced.pending).toMatchObject({ kind: 'reaction', actorSide: 0, revealed: { pieceType: 'Rook', cardId: rookId } })
     expect(announced.board[1][0]).toBeNull()
 
     const resolved = play(announced, 1, { type: 'pass_reaction' }).state
     expect(resolved.pending).toBeNull()
-    expect(resolved.board[1][0]).toMatchObject({ type: 'Rook', owner: 0 })
+    // The piece keeps its card's id, which lets the screen animate the card onto the board
+    expect(resolved.board[1][0]).toMatchObject({ type: 'Rook', owner: 0, id: rookId })
   })
 
   it('passes automatically when the reaction timer runs out', () => {
