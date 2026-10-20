@@ -9,6 +9,9 @@ import DiscardPile from '../components/DiscardPile'
 import CaptureSlide from '../components/CaptureSlide'
 import ReturnSlide from '../components/ReturnSlide'
 import DeckSlide from '../components/DeckSlide'
+import CardDetails from '../components/CardDetails'
+import Modal from '../components/Modal'
+import RulesModal from '../components/RulesModal'
 import { isValidMove, isValidAttack, isPinned, isFatigued } from '@checkline/engine'
 import { getAttackRange } from '../utils/attackRange'
 
@@ -82,6 +85,11 @@ export default function Game({ solo = false }) {
   // null | number — where to insert the lifted card when hovering back over hand
 
   const [reactionPct, setReactionPct] = useState(100)
+  const [inspected, setInspected] = useState(null)
+  // null | { type } for a hand card | { piece } for a board piece, shown in the details panel
+  const [lastMove, setLastMove] = useState('')
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [gameOverSeen, setGameOverSeen] = useState(false)
   const [turnFlash, setTurnFlash] = useState(false)
 
   // ── Refs ───────────────────────────────────────────────────────────
@@ -137,7 +145,7 @@ export default function Game({ solo = false }) {
   }, [handHovered])
 
   useSocket({
-    game_starting:         ({ state }) => { setState(state); clearAll() },
+    game_starting:         ({ state }) => { setState(state); clearAll(); setLastMove(''); setGameOverSeen(false) },
     opponent_hand_order:   ({ ids }) => setOppHandIds(ids),
     discard_view:          ({ index, browserId }) => { setDiscardViewIndex(index); setDiscardBrowserId(browserId) },
     opponent_select_piece: payload => {
@@ -229,6 +237,7 @@ export default function Game({ solo = false }) {
       }
 
       setState(s)
+      if (lastAction) setLastMove(describeLastAction(lastAction, side, s.players))
 
       // Flash turn indicator when turn changes
       if (prevTurnRef.current !== null && prevTurnRef.current !== s.currentTurn) {
@@ -882,54 +891,139 @@ if (!isMyTurn || !inActions || attackPending) return
     )
   }
 
+  const opponentName = opponent.name
+  const promptActive = !!(reactionWindowMode || bodyguardMode || enslaveMode)
+  const detailsPiece = inspected?.piece ?? (!inspected && selectedPiece ? state.board[selectedPiece.row]?.[selectedPiece.lane] : null)
+  const detailsType = inspected?.type ?? (!inspected?.piece && liftedCard ? liftedCard.card.type : null)
+
+  const gameOverReason = !isGameOver ? '' : state.endReason === 'forfeit'
+    ? `${state.players[1 - state.winner].name} forfeited.`
+    : iWon ? `${opponentName}'s King was still in check at the end of their turn.` : 'Your King was still in check at the end of your turn.'
+
+  // What the status bar under the board says and offers, depending on the situation
+  function renderStatus() {
+    if (isGameOver) {
+      return (
+        <>
+          <span className="status-text"><strong>{iWon ? 'You win.' : 'You lose.'}</strong> {gameOverReason}</span>
+          <button className="status-btn" onClick={() => emit('play_again_vote', { vote: !iVoted })}>{iVoted ? 'Cancel rematch' : 'Play again'}</button>
+          <button className="status-btn btn-secondary" onClick={() => navigate('/')}>Home</button>
+        </>
+      )
+    }
+    if (reversalTargetMode) {
+      return (
+        <>
+          <span className="status-text"><strong>Reversal:</strong> choose a new target for the {reactionWindowMode?.action?.effectType ?? 'card'}.</span>
+          <button className="status-btn btn-secondary" onClick={() => { setReversalTargetMode(null); emit('reversal_cancel') }}>Cancel</button>
+        </>
+      )
+    }
+    if (reactionWindowMode) {
+      return (
+        <>
+          <span className="status-text"><strong>{opponentName} is {richActionLabel(reactionWindowMode.action)}.</strong> Choose a glowing card to react, or let it happen.</span>
+          <span className="status-timer" role="img" aria-label="Time left to react"><span style={{ width: `${reactionPct}%` }} /></span>
+          <button className="status-btn btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>Let it happen</button>
+        </>
+      )
+    }
+    if (bodyguardMode) {
+      return (
+        <>
+          <span className="status-text">
+            <strong>Your {bodyguardMode.targetType} is under attack.</strong>{' '}
+            {bodyguardMode.isKingAttack ? 'Choose a Bodyguard to sacrifice.' : 'Choose a Bodyguard to sacrifice, or let it be taken.'}
+          </span>
+          {!bodyguardMode.isKingAttack && (
+            <button className="status-btn btn-secondary" onClick={() => { emit('bodyguard_response', { decline: true }); setBodyguardMode(null) }}>Let it be taken</button>
+          )}
+        </>
+      )
+    }
+    if (enslaveMode) {
+      return (
+        <>
+          <span className="status-text"><strong>Enslave:</strong> choose a square on your side for the captured {enslaveMode.pieceType}.</span>
+          <button className="status-btn btn-secondary" onClick={() => {
+            emit('enslave_response', { discard: true })
+            setEnslaveMode(null)
+            setFloatingPiece(null)
+            emit('select_card_type', { cardType: null, cardId: null })
+          }}>Discard it</button>
+        </>
+      )
+    }
+    if (state.reactionWindowOpen && isMyTurn) {
+      return <span className="status-text">Waiting to see if {opponentName} reacts…</span>
+    }
+    if (!isMyTurn) {
+      return <span className="status-text">{inDiscard ? `${opponentName} is discarding…` : `${opponentName} is taking their turn…`}</span>
+    }
+    if (liftedCard) {
+      const type = liftedCard.card.type
+      const needsNoTarget = INSTANT.has(type) || type === 'Purge'
+      return (
+        <>
+          <span className="status-text">
+            <strong>{type}:</strong> {needsNoTarget ? 'click the board to play it.' : PLACEABLE.has(type) ? 'choose a square on your side.' : 'choose a highlighted target.'}
+          </span>
+          {canCycleViaDiscard && <button className="status-btn btn-secondary" onClick={handleCycle}>Cycle it</button>}
+          <button className="status-btn btn-secondary" onClick={clearAll}>Cancel</button>
+        </>
+      )
+    }
+    if (selectedPiece) {
+      return (
+        <>
+          <span className="status-text"><strong>{selectedPieceType}:</strong> move to a gold square or attack a red one.</span>
+          {canSacrifice && <button className="status-btn btn-secondary" onClick={handleSacrifice}>Sacrifice</button>}
+          <button className="status-btn btn-secondary" onClick={() => { clearAll(); setPiece(null) }}>Cancel</button>
+        </>
+      )
+    }
+    if (state.inCheck?.[side]) {
+      return <span className="status-text"><strong>Check:</strong> move your King, block, or take the attacker before your turn ends.</span>
+    }
+    return <span className="status-text">Your turn: choose a card or one of your pieces.</span>
+  }
+
   return (
     <div className="game">
       {forfeitConfirm && (
-        <div className="modal-overlay" onClick={() => setForfeitConfirm(false)}>
-          <div className="modal-dialog" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">Forfeit game?</div>
-            <div className="modal-body">You will lose the match.</div>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setForfeitConfirm(false)}>Cancel</button>
-              <button className="btn-danger" onClick={() => { emit('forfeit'); setForfeitConfirm(false) }}>Confirm Forfeit</button>
-            </div>
+        <Modal title="Forfeit the game?" onClose={() => setForfeitConfirm(false)}>
+          <p className="modal-body">{opponentName} will win this game.</p>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={() => setForfeitConfirm(false)}>Keep playing</button>
+            <button className="btn-danger" onClick={() => { emit('forfeit'); setForfeitConfirm(false) }}>Forfeit</button>
           </div>
-        </div>
+        </Modal>
       )}
-      <GameInfo state={state} side={side} turnFlash={turnFlash} myWillBeDisrupted={myWillBeDisrupted} oppWillBeDisrupted={oppWillBeDisrupted} />
-      {isGameOver && (
-        <div className="game-over-banner">
-          <span className={iWon ? 'game-over-win' : 'game-over-lose'}>
-            {iWon ? 'You win!' : 'You lose.'}
-          </span>
-          <span className="game-over-sub">
-            {state.endReason === 'forfeit'
-              ? `${state.players[1 - state.winner].name} forfeited.`
-              : `${state.players[state.winner].name} wins by checkmate.`}
-          </span>
-        </div>
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
+      {isGameOver && !gameOverSeen && (
+        <Modal title={iWon ? 'You win!' : 'You lose'} onClose={() => setGameOverSeen(true)} className="game-over-dialog">
+          <p className="modal-body">{gameOverReason}</p>
+          {playAgainVotes.length > 0 && !iVoted && <p className="modal-body">{opponentName} wants a rematch.</p>}
+          <div className="modal-actions modal-actions-stack">
+            <button onClick={() => emit('play_again_vote', { vote: !iVoted })}>{iVoted ? `Waiting for ${opponentName}… (cancel)` : 'Play again'}</button>
+            <button className="btn-secondary" onClick={() => navigate('/')}>Back to home</button>
+            <button className="btn-link" onClick={() => setGameOverSeen(true)}>See the board</button>
+          </div>
+        </Modal>
       )}
-<div className="opponent-area" ref={oppHandAreaRef}>
-        <Hand cards={displayOppHand} faceDown />
-      </div>
 
-      {enslaveMode && (
-        <div className="enslave-prompt">
-          Enslave: Place the captured {enslaveMode.pieceType} on your side, or discard it.
-        </div>
-      )}
-      {bodyguardMode && (
-        <div className="bodyguard-prompt">
-          Bodyguard: {bodyguardMode.isKingAttack
-            ? `Your King is under attack! Choose a Bodyguard to sacrifice.`
-            : `Your ${bodyguardMode.targetType} is under attack. Choose a Bodyguard to sacrifice, or decline.`}
-        </div>
-      )}
-      {reactionWindowMode && (
-        <div className="reaction-window-banner">
-          Opponent is {richActionLabel(reactionWindowMode.action)}. React?
-        </div>
-      )}
+      <GameInfo
+        state={state}
+        side={side}
+        turnFlash={turnFlash}
+        myWillBeDisrupted={myWillBeDisrupted}
+        oppWillBeDisrupted={oppWillBeDisrupted}
+        opponentHand={(
+          <div className="opponent-area" ref={oppHandAreaRef}>
+            <Hand cards={displayOppHand} faceDown />
+          </div>
+        )}
+      />
 
       {captureSlides.map((slide, idx) => (
         <CaptureSlide
@@ -951,216 +1045,160 @@ if (!isMyTurn || !inActions || attackPending) return
         />
       )}
 
-      <div className="board-area">
-        <DiscardPile
-          discardPile={state.discardPile ?? []}
-          viewIndex={discardViewIndex}
-          browserId={discardBrowserId}
-          mySide={side}
-          canCycle={canCycleViaDiscard}
-          onBrowse={delta => emit('browse_discard', { delta })}
-          onCycle={handleCycle}
-          pileRef={discardPileRef}
-          canSacrifice={canSacrifice}
-          discardHovered={discardHovered}
-          floatingPiece={floatingPiece}
-          onSacrificeHover={() => setDiscardHovered(true)}
-          onSacrificeLeave={() => setDiscardHovered(false)}
-          onSacrifice={handleSacrifice}
-          liftedCard={liftedCard}
-          cycleHovered={discardHovered && canCycleViaDiscard}
-          onCycleHover={() => { setDiscardHovered(true); emit('hover_discard', { hovering: true }) }}
-          onCycleLeave={() => { setDiscardHovered(false); emit('hover_discard', { hovering: false }) }}
-          oppDiscardHovered={oppDiscardHovered}
-          oppLiftedCardType={oppSelectedCardType}
-        />
-        <Board
-          board={previewBoard ?? state.board}
-          side={side}
-          isMyTurn={isMyTurn}
-          selectedPiece={selectedPiece}
-          placingCard={liftedCard !== null && PLACEABLE.has(liftedCard.card.type)}
-          validMoves={validMoves}
-          validAttacks={validAttacks}
-          attackRange={attackRange}
-          cardTargets={enslaveTargets ?? bodyguardTargets ?? reversalTargets ?? cardTargets}
-          underAttack={bodyguardMode ? `${bodyguardMode.targetRow},${bodyguardMode.targetLane}` : null}
-          onSpaceClick={!isGameOver && (enslaveMode || bodyguardMode || reversalTargetMode || (isMyTurn && inActions)) ? handleSpaceClick : undefined}
-          spaceRefCallback={(r, l, el) => { boardSpaceRefs.current[`${r},${l}`] = el }}
-          onSpaceMouseEnter={handleSpaceMouseEnter}
-          onBoardMouseLeave={handleBoardMouseLeave}
-          floatingPiece={floatingPiece}
-          boardHoveredCell={boardHoveredCell}
-          handFloatingCard={handFloatingCard}
-          oppSelectedPiece={oppSelectedPiece}
-          oppHoveredCell={(oppDiscardHovered || oppDeckHovered) ? null : oppHoveredCell}
-          oppSelectedCardType={oppSelectedCardType}
-          confirmTarget={confirmTarget}
-          isShaking={isShaking}
-          errorTip={errorMsg}
-        />
-        <DeckPile
-          deckSize={state.deckSize ?? 0}
-          pileRef={deckPileRef}
-          deckHovered={deckHovered && canShuffleIntoDeck}
-          liftedCard={liftedCard}
-          onDeckHover={canShuffleIntoDeck ? () => { setDeckHovered(true); emit('hover_deck', { hovering: true }) } : undefined}
-          onDeckLeave={canShuffleIntoDeck ? () => { setDeckHovered(false); emit('hover_deck', { hovering: false }) } : undefined}
-          onDeckClick={canShuffleIntoDeck ? handleShuffleIntoDeck : undefined}
-          oppDeckHovered={oppDeckHovered}
-        />
+      <div className="game-main">
+        <div className="game-piles">
+          <DeckPile
+            deckSize={state.deckSize ?? 0}
+            pileRef={deckPileRef}
+            deckHovered={deckHovered && canShuffleIntoDeck}
+            liftedCard={liftedCard}
+            onDeckHover={canShuffleIntoDeck ? () => { setDeckHovered(true); emit('hover_deck', { hovering: true }) } : undefined}
+            onDeckLeave={canShuffleIntoDeck ? () => { setDeckHovered(false); emit('hover_deck', { hovering: false }) } : undefined}
+            onDeckClick={canShuffleIntoDeck ? handleShuffleIntoDeck : undefined}
+            oppDeckHovered={oppDeckHovered}
+          />
+          <DiscardPile
+            discardPile={state.discardPile ?? []}
+            viewIndex={discardViewIndex}
+            browserId={discardBrowserId}
+            mySide={side}
+            canCycle={canCycleViaDiscard}
+            onBrowse={delta => emit('browse_discard', { delta })}
+            onCycle={handleCycle}
+            pileRef={discardPileRef}
+            canSacrifice={canSacrifice}
+            discardHovered={discardHovered}
+            floatingPiece={floatingPiece}
+            onSacrificeHover={() => setDiscardHovered(true)}
+            onSacrificeLeave={() => setDiscardHovered(false)}
+            onSacrifice={handleSacrifice}
+            liftedCard={liftedCard}
+            cycleHovered={discardHovered && canCycleViaDiscard}
+            onCycleHover={() => { setDiscardHovered(true); emit('hover_discard', { hovering: true }) }}
+            onCycleLeave={() => { setDiscardHovered(false); emit('hover_discard', { hovering: false }) }}
+            oppDiscardHovered={oppDiscardHovered}
+            oppLiftedCardType={oppSelectedCardType}
+          />
+        </div>
+
+        <div className="game-board-col">
+          <div className="table-frame">
+            <div className="table-felt">
+              <Board
+                board={previewBoard ?? state.board}
+                side={side}
+                isMyTurn={isMyTurn}
+                selectedPiece={selectedPiece}
+                placingCard={liftedCard !== null && PLACEABLE.has(liftedCard.card.type)}
+                validMoves={validMoves}
+                validAttacks={validAttacks}
+                attackRange={attackRange}
+                cardTargets={enslaveTargets ?? bodyguardTargets ?? reversalTargets ?? cardTargets}
+                underAttack={bodyguardMode ? `${bodyguardMode.targetRow},${bodyguardMode.targetLane}` : null}
+                inCheck={state.inCheck}
+                onSpaceClick={!isGameOver && (enslaveMode || bodyguardMode || reversalTargetMode || (isMyTurn && inActions)) ? handleSpaceClick : undefined}
+                onInspect={piece => setInspected({ piece })}
+                spaceRefCallback={(r, l, el) => { boardSpaceRefs.current[`${r},${l}`] = el }}
+                onSpaceMouseEnter={handleSpaceMouseEnter}
+                onBoardMouseLeave={handleBoardMouseLeave}
+                floatingPiece={floatingPiece}
+                boardHoveredCell={boardHoveredCell}
+                handFloatingCard={handFloatingCard}
+                oppSelectedPiece={oppSelectedPiece}
+                oppHoveredCell={(oppDiscardHovered || oppDeckHovered) ? null : oppHoveredCell}
+                oppSelectedCardType={oppSelectedCardType}
+                confirmTarget={confirmTarget}
+                isShaking={isShaking}
+                errorTip={errorMsg}
+              />
+            </div>
+          </div>
+          <div className={`status-bar${promptActive ? ' status-bar-prompt' : ''}`} role="status" aria-live="polite">
+            {renderStatus()}
+          </div>
+          {errorMsg && <p className="visually-hidden" role="alert">{errorMsg}</p>}
+        </div>
+
+        <aside className="game-side" aria-label="Card details">
+          <CardDetails type={detailsType} piece={detailsPiece} />
+          <div className="game-side-footer">
+            {lastMove && <p className="last-move"><strong>Last move:</strong> {lastMove}</p>}
+            {!isGameOver && isMyTurn && inActions && !promptActive && (
+              <button className="end-turn-btn" onClick={handleEndTurn}>End turn</button>
+            )}
+            <div className="game-side-links">
+              <button className="btn-link" onClick={() => setRulesOpen(true)}>Rules</button>
+              {!isGameOver && <button className="btn-link" onClick={() => setForfeitConfirm(true)}>Forfeit</button>}
+            </div>
+          </div>
+        </aside>
       </div>
 
-      <div className="my-area">
-        <div
-          ref={ownHandAreaRef}
-          onMouseEnter={(e) => {
-            setHandHovered(true)
-            emit('hand_hover_start')
-            if (liftedCard && isMyTurn && inActions) {
-              emit('hover_space', { row: null, lane: null })
-              setBoardHoveredCell(null)
-              const rect = ownHandAreaRef.current?.getBoundingClientRect()
-              if (rect) {
-                const relX = (e.clientX - rect.left) / rect.width
-                const newIdx = Math.min(filteredHand.length, Math.max(0, Math.round(relX * filteredHand.length)))
-                setHandInsertIndex(newIdx)
-                // Emit full order (liftedCard included) THEN clear select_card_type —
-                // opponent sees the card appear at the right slot without snapping
-                const newOrder = [...filteredHand.slice(0, newIdx), liftedCard.card, ...filteredHand.slice(newIdx)]
-                emit('hand_drag', { ids: newOrder.map(c => c.id) })
-                emit('select_card_type', { cardType: null, cardId: null })
-                insertRevealedRef.current = true
-              }
-            }
-          }}
-          onMouseLeave={() => {
-            setHandHovered(false)
-            emit('hand_hover_end')
-            if (insertRevealedRef.current) {
-              insertRevealedRef.current = false
-              if (liftedCard) {
-                // Card goes back to floating on board — restore original order and lifted state
-                emit('hand_drag', { ids: (localHandOrder ?? myHand).map(c => c.id) })
-                emit('select_card_type', { cardType: liftedCard.card.type, cardId: liftedCard.card.id })
-              }
-            }
-            setHandInsertIndex(null)
-          }}
-          onMouseMove={liftedCard && isMyTurn && inActions ? (e) => {
+      <div
+        className="game-hand"
+        ref={ownHandAreaRef}
+        onMouseEnter={(e) => {
+          setHandHovered(true)
+          emit('hand_hover_start')
+          if (liftedCard && isMyTurn && inActions) {
+            emit('hover_space', { row: null, lane: null })
+            setBoardHoveredCell(null)
             const rect = ownHandAreaRef.current?.getBoundingClientRect()
             if (rect) {
               const relX = (e.clientX - rect.left) / rect.width
               const newIdx = Math.min(filteredHand.length, Math.max(0, Math.round(relX * filteredHand.length)))
-              if (newIdx !== handInsertIndex) {
-                setHandInsertIndex(newIdx)
-                // Emit full order with liftedCard at new position — opponent sees real-time movement
-                const newOrder = [...filteredHand.slice(0, newIdx), liftedCard.card, ...filteredHand.slice(newIdx)]
-                emit('hand_drag', { ids: newOrder.map(c => c.id) })
-              }
+              setHandInsertIndex(newIdx)
+              // Emit full order (liftedCard included) THEN clear select_card_type —
+              // opponent sees the card appear at the right slot without snapping
+              const newOrder = [...filteredHand.slice(0, newIdx), liftedCard.card, ...filteredHand.slice(newIdx)]
+              emit('hand_drag', { ids: newOrder.map(c => c.id) })
+              emit('select_card_type', { cardType: null, cardId: null })
+              insertRevealedRef.current = true
             }
-          } : undefined}
-        >
-          <Hand
-            cards={displayHand}
-            interceptedIds={state.interceptedCardIds}
-            reactionIndices={reactionIndices}
-            selectedIdx={handInsertIndex !== null ? handInsertIndex : undefined}
-            onCardClick={reactionWindowMode ? handleReactionCardClick : (isMyTurn && inActions ? handleCardClick : undefined)}
-            onReorder={handInsertIndex === null ? (newCards => {
-              setLocalHandOrder(newCards)
-              emit('hand_drag', { ids: newCards.map(c => c.id) })
-            }) : undefined}
-            onDragEnd={handInsertIndex === null ? (finalCards => {
-              emit('hand_reorder', { ids: finalCards.map(c => c.id) })
-            }) : undefined}
-          />
-        </div>
-        <div className="game-controls">
-          {isGameOver ? (
-            <>
-              <button className="btn-secondary" onClick={() => navigate('/')}>Leave</button>
-              <button
-                className={iVoted ? 'btn-active' : ''}
-                onClick={() => emit('play_again_vote', { vote: !iVoted })}
-              >
-                {iVoted ? 'Cancel' : 'Play Again'}
-              </button>
-              {playAgainVotes.length > 0 && (
-                <span className="play-again-count">{playAgainVotes.length}/2 waiting to play again</span>
-              )}
-            </>
-          ) : (
-            <>
-              {/* Context controls */}
-              {reactionWindowMode ? (
-                <>
-                  {reversalTargetMode
-                    ? <span className="waiting-turn">Click a target on the board for Reversal…</span>
-                    : <span className="waiting-turn">Click a highlighted card to react, or pass.</span>
-                  }
-                  {reversalTargetMode
-                    ? <button className="btn-secondary" onClick={() => {
-                        setReversalTargetMode(null)
-                        emit('reversal_cancel')
-                      }}>Cancel Reversal</button>
-                    : <button className="btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>Pass</button>
-                  }
-                  {!reversalTargetMode && <div className="auto-end-wrap" style={{ width: 'auto', minWidth: '80px' }}>
-                    <div className="auto-end-track">
-                      <div
-                        className="auto-end-bar"
-                        style={{
-                          width: `${reactionPct}%`,
-                          animation: 'none',
-                          transition: 'none',
-                        }}
-                      />
-                    </div>
-                  </div>}
-                </>
-              ) : state?.reactionWindowOpen && isMyTurn ? (
-                <span className="waiting-turn">Opponent is considering a reaction…</span>
-              ) : (
-                <>
-                  {isMyTurn && inActions && liftedCard !== null && (INSTANT.has(liftedCard.card.type) || liftedCard.card.type === 'Purge') && (
-                    <span className="waiting-turn">Click anywhere on the board to play {liftedCard.card.type}</span>
-                  )}
-                  {enslaveMode && (
-                    <button className="btn-secondary" onClick={() => {
-                      emit('enslave_response', { discard: true })
-                      setEnslaveMode(null)
-                      setFloatingPiece(null)
-                      emit('select_card_type', { cardType: null, cardId: null })
-                    }}>
-                      Discard {enslaveMode.pieceType}
-                    </button>
-                  )}
-                  {bodyguardMode && !bodyguardMode.isKingAttack && (
-                    <button className="btn-secondary" onClick={() => { emit('bodyguard_response', { decline: true }); setBodyguardMode(null) }}>
-                      Decline Bodyguard
-                    </button>
-                  )}
-                  {!isMyTurn && (
-                    <span className="waiting-turn">
-                      {inDiscard ? `Waiting for ${opponent.name} to discard…` : `Waiting for ${opponent.name}…`}
-                    </span>
-                  )}
-                </>
-              )}
-
-              {/* Spacer pushes end turn + forfeit to the right */}
-              <div style={{ flex: 1 }} />
-
-              {!reactionWindowMode && !enslaveMode && !bodyguardMode && isMyTurn && inActions && (
-                <button onClick={handleEndTurn}>End Turn</button>
-              )}
-            </>
-          )}
-        </div>
-        {!isGameOver && (
-          <button className="btn-secondary forfeit-btn" onClick={() => setForfeitConfirm(true)}>Forfeit</button>
-        )}
+          }
+        }}
+        onMouseLeave={() => {
+          setHandHovered(false)
+          emit('hand_hover_end')
+          if (insertRevealedRef.current) {
+            insertRevealedRef.current = false
+            if (liftedCard) {
+              // Card goes back to floating on board — restore original order and lifted state
+              emit('hand_drag', { ids: (localHandOrder ?? myHand).map(c => c.id) })
+              emit('select_card_type', { cardType: liftedCard.card.type, cardId: liftedCard.card.id })
+            }
+          }
+          setHandInsertIndex(null)
+        }}
+        onMouseMove={liftedCard && isMyTurn && inActions ? (e) => {
+          const rect = ownHandAreaRef.current?.getBoundingClientRect()
+          if (rect) {
+            const relX = (e.clientX - rect.left) / rect.width
+            const newIdx = Math.min(filteredHand.length, Math.max(0, Math.round(relX * filteredHand.length)))
+            if (newIdx !== handInsertIndex) {
+              setHandInsertIndex(newIdx)
+              // Emit full order with liftedCard at new position — opponent sees real-time movement
+              const newOrder = [...filteredHand.slice(0, newIdx), liftedCard.card, ...filteredHand.slice(newIdx)]
+              emit('hand_drag', { ids: newOrder.map(c => c.id) })
+            }
+          }
+        } : undefined}
+      >
+        <Hand
+          cards={displayHand}
+          interceptedIds={state.interceptedCardIds}
+          reactionIndices={reactionIndices}
+          selectedIdx={handInsertIndex !== null ? handInsertIndex : undefined}
+          onCardClick={reactionWindowMode ? handleReactionCardClick : (isMyTurn && inActions ? handleCardClick : undefined)}
+          onInspect={type => setInspected({ type })}
+          onReorder={handInsertIndex === null ? (newCards => {
+            setLocalHandOrder(newCards)
+            emit('hand_drag', { ids: newCards.map(c => c.id) })
+          }) : undefined}
+          onDragEnd={handInsertIndex === null ? (finalCards => {
+            emit('hand_reorder', { ids: finalCards.map(c => c.id) })
+          }) : undefined}
+        />
       </div>
 
       {deckSlide && (
@@ -1172,6 +1210,32 @@ if (!isMyTurn || !inActions || attackPending) return
       )}
     </div>
   )
+}
+
+// A one-line summary of what just happened, for the "Last move" line
+function describeLastAction(la, mySide, players) {
+  const who = la.actorSide === mySide ? 'You' : (players[la.actorSide]?.name ?? 'Opponent')
+  const p = la.payload ?? {}
+  let text
+  switch (la.type) {
+    case 'place':             text = `${who} placed a ${p.pieceType ?? 'piece'}`; break
+    case 'direct_move':       text = `${who} moved a piece`; break
+    case 'direct_attack':     text = la.secondaryEffect === 'shield_absorbed' ? `${who} attacked, but a Shield blocked it` : `${who} captured a piece`; break
+    case 'direct_sacrifice':  text = `${who} sacrificed a ${p.pieceType ?? 'piece'}`; break
+    case 'cycle':             text = `${who} cycled a card`; break
+    case 'shuffle_into_deck': text = `${who} shuffled a card into the deck`; break
+    case 'end_turn':          text = `${who} ended the turn`; break
+    case 'play_buff':         text = `${who} played ${p.buffType ?? 'a Buff'}`; break
+    case 'play_debuff':       text = `${who} played ${p.debuffType ?? 'a Debuff'}`; break
+    case 'bodyguard_save':    text = 'A Bodyguard was sacrificed to stop an attack'; break
+    default:
+      text = la.type.startsWith('play_')
+        ? `${who} played ${la.type[5].toUpperCase()}${la.type.slice(6)}`
+        : `${who} acted`
+  }
+  if (la.reactionFired === 'intercept') text += ', but it was Intercepted'
+  if (la.reactionFired === 'reversal') text += ', redirected by Reversal'
+  return `${text}.`
 }
 
 function richActionLabel(action) {

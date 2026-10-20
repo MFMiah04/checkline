@@ -1,24 +1,7 @@
 import { useEffect, useRef } from 'react'
 
-const SYMBOLS = { King: '♚', Queen: '♛', Rook: '♜', Bishop: '♝', Knight: '♞', Pawn: '♟' }
-
-const CARD_ART = {
-  Reposition: '→', Swap: '⇄', Command: '+', Disrupt: '⊗', Dispel: '×',
-  Purge: '⊛', Return: '↩', Enslave: '∞',
-  Shield: '◉', Bodyguard: '◈', Protection: '◇',
-  Pin: '⊘', Fatigue: '⏸', Silence: '∅',
-  Intercept: '✕', Reversal: '↺',
-}
-
-const CATEGORY = {
-  Pawn: 'piece', Knight: 'piece', Bishop: 'piece',
-  Rook: 'piece', Queen: 'piece', King: 'piece',
-  Reposition: 'control', Swap: 'control', Command: 'control',
-  Disrupt: 'control', Dispel: 'control', Purge: 'control', Return: 'control',
-  Enslave: 'buff', Shield: 'buff', Bodyguard: 'buff', Protection: 'buff',
-  Pin: 'debuff', Fatigue: 'debuff', Silence: 'debuff',
-  Intercept: 'reaction', Reversal: 'reaction'
-}
+import CardFace from './CardFace'
+import PieceToken from './PieceToken'
 
 export default function DiscardPile({
   discardPile = [], viewIndex = 0, browserId = null, mySide,
@@ -35,7 +18,6 @@ export default function DiscardPile({
   const throttleRef = useRef(null)
   const count = discardPile.length
   const viewCard = count > 0 ? (discardPile[viewIndex] ?? discardPile[0]) : null
-  const category = viewCard ? (CATEGORY[viewCard.type] || '') : ''
   const opponentBrowsing = browserId !== null && browserId !== mySide
 
   useEffect(() => {
@@ -71,7 +53,7 @@ export default function DiscardPile({
       onMouseLeave={canSacrifice ? onSacrificeLeave : canCycle ? onCycleLeave : undefined}
     >
       <span className="pile-label">
-        Discard ({count}){opponentBrowsing ? ' — browsing' : ''}
+        Discard · {count}{opponentBrowsing ? ' · opponent browsing' : ''}
       </span>
       <div className="pile-stack">
         {count === 0 ? (
@@ -80,19 +62,8 @@ export default function DiscardPile({
           <>
             {count > 2 && <div className="card face-down pile-card pile-card-3" />}
             {count > 1 && <div className="card face-down pile-card pile-card-2" />}
-            <div className={`card ${category} pile-card pile-card-1`}>
-              {(() => {
-                const icon = SYMBOLS[viewCard?.type] ?? CARD_ART[viewCard?.type] ?? viewCard?.type?.[0]
-                return (<>
-                  <div className="card-header">
-                    <span className="card-header-icon">{icon}</span>
-                    <span className="card-header-name">{viewCard?.type}</span>
-                  </div>
-                  <div className="card-body">
-                    <span className="card-center-art">{icon}</span>
-                  </div>
-                </>)
-              })()}
+            <div className="card pile-card pile-card-1">
+              <CardFace type={viewCard.type} compact />
               {viewIndex > 0 && (
                 <span className="pile-browse-idx">{viewIndex + 1}/{count}</span>
               )}
@@ -103,30 +74,29 @@ export default function DiscardPile({
 
       {/* Floating card preview when hovering with a lifted card for cycle */}
       {canCycle && cycleHovered && liftedCard && (
-        <div className="pile-floating-preview">
-          <span className="card-name">{liftedCard.card.type}</span>
+        <div className="card pile-floating-preview">
+          <CardFace type={liftedCard.card.type} compact />
         </div>
       )}
 
       {/* Floating piece preview when hovering with a selected piece for sacrifice */}
       {canSacrifice && discardHovered && floatingPiece && (
-        <div className={`pile-floating-preview${floatingPiece.piece.owner === mySide ? '' : ' enemy'}`}>
-          <span className="piece-symbol">{SYMBOLS[floatingPiece.piece.type] ?? floatingPiece.piece.type?.[0]}</span>
-          <span className="piece-label">{floatingPiece.piece.type}</span>
+        <div className="pile-floating-preview pile-floating-piece">
+          <PieceToken piece={floatingPiece.piece} mySide={mySide} />
         </div>
       )}
 
       {/* Card preview when opponent is hovering their card over discard pile */}
       {oppDiscardHovered && !canSacrifice && !canCycle && (
         oppLiftedCardType
-          ? <div className="pile-floating-preview">
-              <span className="card-name">{oppLiftedCardType}</span>
+          ? <div className="card pile-floating-preview">
+              <CardFace type={oppLiftedCardType} compact />
             </div>
-          : <div className="pile-floating-preview pile-floating-facedown" />
+          : <div className="card face-down pile-floating-preview" />
       )}
 
       {canSacrifice
-        ? <span className="pile-cycle-hint" style={{ color: 'rgba(239,83,80,0.85)' }}>Sacrifice? (1 action)</span>
+        ? <span className="pile-cycle-hint pile-hint-danger">Sacrifice? (1 action)</span>
         : canCycle
           ? <span className="pile-cycle-hint">Cycle? (1 action)</span>
           : count > 1 && <span className="pile-scroll-hint">Scroll to browse</span>

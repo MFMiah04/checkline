@@ -5,7 +5,7 @@ const PIECE_TYPES = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
 export default function Board({
   board, side, isMyTurn, selectedPiece, placingCard,
   validMoves, validAttacks, attackRange, cardTargets,
-  underAttack, onSpaceClick,
+  underAttack, inCheck, onSpaceClick, onInspect,
   // Floating piece props
   spaceRefCallback, onSpaceMouseEnter, onBoardMouseLeave,
   floatingPiece,        // { piece, fromRow, fromLane } — own player's floating piece
@@ -37,7 +37,7 @@ export default function Board({
     : null
 
   return (
-    <div className="board" onMouseLeave={onBoardMouseLeave}>
+    <div className="board" role="group" aria-label="Board" onMouseLeave={onBoardMouseLeave}>
       {rowOrder.map(rowIdx => (
         <div key={rowIdx} className="board-row">
           {board[rowIdx].map((piece, laneIdx) => {
@@ -89,7 +89,9 @@ export default function Board({
                 isAttackRange={attackRange?.has(cellKey) ?? false}
                 isCardTarget={cardTargets?.has(cellKey) ?? false}
                 isUnderAttack={underAttack === cellKey}
+                isInCheck={piece?.type === 'King' && !!inCheck?.[piece.owner]}
                 onClick={onSpaceClick ? () => onSpaceClick(rowIdx, laneIdx) : undefined}
+                onInspect={onInspect}
                 spaceRefCallback={spaceRefCallback}
                 isFloatingOrigin={isFloatingOrigin}
                 isFloatingTarget={isFloatingTarget}

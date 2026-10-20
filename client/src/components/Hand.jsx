@@ -13,7 +13,7 @@ function fanTransform(count, i, isOpponent = false) {
   return { rotate: angle, y, scale: isOpponent ? 0.72 : 1 }
 }
 
-function HandCard({ card, i, fanCount, isSelected, isIntercepted, isReactionAvailable, isClickable, isDraggable, onCardClick, onDragStart, onDragEnd }) {
+function HandCard({ card, i, fanCount, isSelected, isIntercepted, isReactionAvailable, isClickable, isDraggable, onCardClick, onInspect, onDragStart, onDragEnd }) {
   const { rotate, y, scale } = fanTransform(fanCount, i)
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 })
   const [hovered, setHovered] = useState(false)
@@ -55,13 +55,14 @@ function HandCard({ card, i, fanCount, isSelected, isIntercepted, isReactionAvai
           intercepted={isIntercepted}
           reactionAvailable={isReactionAvailable}
           onClick={isClickable ? () => onCardClick(i) : undefined}
+          onInspect={onInspect}
         />
       </motion.div>
     </Reorder.Item>
   )
 }
 
-export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx, interceptedIds, reactionIndices, onCardClick, onReorder, onDragEnd: onDragEndProp }) {
+export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx, interceptedIds, reactionIndices, onCardClick, onInspect, onReorder, onDragEnd: onDragEndProp }) {
   const isDraggingRef = useRef(false)
   const currentOrderRef = useRef(null)
 
@@ -70,7 +71,7 @@ export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx
     const ids = typeof cards === 'object' && cards !== null ? (cards.ids ?? null) : null
     const keys = ids ?? Array.from({ length: count }, (_, i) => `opp-${i}`)
     return (
-      <div className="hand opponent-hand">
+      <div className="hand opponent-hand" aria-label={`${count} cards`}>
         {keys.map((key, i) => {
           const { rotate, y, scale } = fanTransform(count, i, true)
           return (
@@ -104,6 +105,7 @@ export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx
       }}
       className="hand"
       as="div"
+      aria-label="Your hand"
     >
       {cardList.map((card, i) => {
         const isSelected = selectedSet?.has(i) || selectedIdx === i
@@ -122,6 +124,7 @@ export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx
             isClickable={isClickable}
             isDraggable={!!onReorder}
             onCardClick={onCardClick}
+            onInspect={onInspect}
             onDragStart={() => { isDraggingRef.current = true }}
             onDragEnd={() => {
               isDraggingRef.current = false

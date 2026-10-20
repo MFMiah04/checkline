@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import Lobby from './pages/Lobby'
 import Game from './pages/Game'
 import './App.css'
+import './styles/game.css'
 
 // The computer player is only downloaded when someone starts a solo game
 const SoloGame = lazy(() => import('./pages/SoloGame'))
