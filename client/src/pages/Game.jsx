@@ -235,7 +235,7 @@ export default function Game({ solo = false }) {
       // Flash turn indicator when turn changes
       if (prevTurnRef.current !== null && prevTurnRef.current !== s.currentTurn) {
         setTurnFlash(true)
-        setTimeout(() => setTurnFlash(false), 1200)
+        setTimeout(() => setTurnFlash(false), 1400)
       }
       prevTurnRef.current = s.currentTurn
 
@@ -992,7 +992,7 @@ if (!isMyTurn || !inActions || attackPending) return
   }
 
   return (
-    <div className="game">
+    <div className={`game${turnFlash && isMyTurn ? ' my-turn-start' : ''}`}>
       {forfeitConfirm && (
         <Modal title="Forfeit the game?" onClose={() => setForfeitConfirm(false)}>
           <p className="modal-body">{opponentName} will win this game.</p>

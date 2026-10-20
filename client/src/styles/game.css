@@ -110,6 +110,37 @@
   color: var(--muted);
 }
 
+/* While it's your turn the badge glows softly, so a glance at the header is enough */
+.turn-badge:not(.turn-badge-theirs) {
+  animation: badge-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes badge-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(227, 198, 111, 0); }
+  50%      { box-shadow: 0 0 14px 2px rgba(227, 198, 111, 0.7); }
+}
+
+/* When your turn starts the badge pops out and back, and the board frame lights up */
+.my-turn-start .turn-badge {
+  animation: badge-pop 0.9s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+@keyframes badge-pop {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(227, 198, 111, 0.9); }
+  35%  { transform: scale(1.5);  box-shadow: 0 0 26px 8px rgba(227, 198, 111, 0.9); }
+  100% { transform: scale(1);    box-shadow: 0 0 10px 2px rgba(227, 198, 111, 0.4); }
+}
+
+.my-turn-start .game-board-col .table-frame {
+  animation: frame-glow 1.4s ease-out;
+}
+
+@keyframes frame-glow {
+  0%   { box-shadow: 0 10px 24px rgba(74, 51, 36, 0.3), inset 0 0 0 2px var(--oak-edge), 0 0 0 0 rgba(227, 198, 111, 0); }
+  30%  { box-shadow: 0 10px 24px rgba(74, 51, 36, 0.3), inset 0 0 0 2px var(--oak-edge), 0 0 0 6px rgba(227, 198, 111, 0.85); }
+  100% { box-shadow: 0 10px 24px rgba(74, 51, 36, 0.3), inset 0 0 0 2px var(--oak-edge), 0 0 0 0 rgba(227, 198, 111, 0); }
+}
+
 .check-indicator {
   font-size: 0.85rem;
   font-weight: 700;
@@ -1038,6 +1069,9 @@ button.card.selected:active:not(:disabled) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .turn-badge:not(.turn-badge-theirs),
+  .my-turn-start .turn-badge,
+  .my-turn-start .game-board-col .table-frame,
   .board-space.under-attack,
   .board-space.confirm-target,
   .card.reaction-available,
