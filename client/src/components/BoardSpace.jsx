@@ -87,8 +87,8 @@ export default function BoardSpace({
 
   const renderPiece = piece && !isFloatingOrigin
 
+  // React needs `key` passed directly, not spread from an object, so it is added at each use
   const sharedMotionProps = {
-    key: 'floating-piece',
     layoutId: 'floating-piece',
     initial: { scale: 0.9, opacity: 0.8 },
     animate: isShaking
@@ -153,7 +153,7 @@ export default function BoardSpace({
           if (!isHandCard) {
             // Board piece being moved — show full piece-group with status cards
             return (
-              <motion.div {...sharedMotionProps} className="floating-board-wrapper">
+              <motion.div key="floating-piece" {...sharedMotionProps} className="floating-board-wrapper">
                 <div className="piece-group">
                   <div className="board-card floating-piece-highlight">
                     <div className="board-card-header">{floatingCard.type}</div>
@@ -185,7 +185,7 @@ export default function BoardSpace({
             // Buff/debuff hand card — preview as board-style card (portrait, same as when placed)
             const isBuff = CATEGORY[floatingCard.type] === 'buff'
             return (
-              <motion.div {...sharedMotionProps} className="floating-hand-wrapper">
+              <motion.div key="floating-piece" {...sharedMotionProps} className="floating-hand-wrapper">
                 <div className={`board-status-card ${isBuff ? 'buff-status' : 'debuff-status'} floating-status-preview`}>
                   <div className="board-card-header">{floatingCard.type}</div>
                   <div className="board-card-body">
@@ -201,7 +201,7 @@ export default function BoardSpace({
           const icon     = SYMBOLS[floatingCard.type] ?? CARD_ART[floatingCard.type] ?? floatingCard.type[0]
           const category = CATEGORY[floatingCard.type] ?? ''
           return (
-            <motion.div {...sharedMotionProps} className="floating-hand-wrapper">
+            <motion.div key="floating-piece" {...sharedMotionProps} className="floating-hand-wrapper">
               <div className={`card ${category}`}>
                 <div className="card-header">
                   <span className="card-header-icon">{icon}</span>
