@@ -385,10 +385,10 @@ export default function Game() {
       for (let l = 0; l <= 4; l++) {
         const p = state.board[r][l]
         if (type === 'buff') {
-          if (p && p.owner === side && p.type !== 'King' && !p.buff && p.debuff?.type !== 'Silence')
+          if (p && p.type !== 'King' && !p.buff && p.debuff?.type !== 'Silence')
             s.add(`${r},${l}`)
         } else if (type === 'debuff') {
-          if (p && p.owner !== side && p.type !== 'King' && !p.debuff && p.buff?.type !== 'Protection')
+          if (p && p.type !== 'King' && !p.debuff && p.buff?.type !== 'Protection')
             s.add(`${r},${l}`)
         } else if (type === 'return') {
           if (p && p.owner === side && p.type !== 'King') s.add(`${r},${l}`)
@@ -649,7 +649,7 @@ if (!isMyTurn || !inActions || attackPending) return
       }
 
       if (type === 'buff') {
-        if (piece?.owner === side && piece.type !== 'King' && !piece.buff && piece.debuff?.type !== 'Silence') {
+        if (piece && piece.type !== 'King' && !piece.buff && piece.debuff?.type !== 'Silence') {
           emitAction({ type: 'play_buff', cardIndex: serverIdx, targetRow: row, targetLane: lane },
             { effectType: card?.type, targetType: piece?.type })
           clearAll()
@@ -660,7 +660,7 @@ if (!isMyTurn || !inActions || attackPending) return
       }
 
       if (type === 'debuff') {
-        if (piece && piece.owner !== side && piece.type !== 'King' && !piece.debuff && piece.buff?.type !== 'Protection') {
+        if (piece && piece.type !== 'King' && !piece.debuff && piece.buff?.type !== 'Protection') {
           emitAction({ type: 'play_debuff', cardIndex: serverIdx, targetRow: row, targetLane: lane },
             { effectType: card?.type, targetType: piece?.type })
           clearAll()
