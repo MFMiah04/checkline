@@ -12,8 +12,8 @@ function generateCode() {
 
 function sanitizeAvatar(avatar) {
   if (!avatar || typeof avatar !== 'object') return null
-  if (avatar.customImage) return null  // block premature base64/URL uploads
-  return avatar
+  const { customImage: _, ...rest } = avatar  // strip image data, keep face settings
+  return rest
 }
 
 export function createRoom(hostSocket, hostName, hostToken, hostAvatar) {
