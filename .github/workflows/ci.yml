@@ -21,7 +21,7 @@ jobs:
       - run: npm test
 
   client-build:
-    name: Client lint and build
+    name: Client lint, tests and build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,6 +35,7 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm test
       - run: npm run build
 
   docker-build:
