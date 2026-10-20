@@ -62,7 +62,6 @@ export default function Game({ solo = false }) {
   // null | { row, lane } — brief gold pulse when action confirmed
   const [captureSlides, setCaptureSlides]        = useState([])
   // [{ piece, fromPos, toPos, isOwn }] — pieces/cards sliding to discard pile
-  const [handHovered, setHandHovered]           = useState(false)
   const [isShaking, setIsShaking]               = useState(false)
   const [discardHovered, setDiscardHovered]      = useState(false)
   const [attackPending, setAttackPending]        = useState(null)
@@ -119,14 +118,13 @@ export default function Game({ solo = false }) {
     reactionTimerRef.current = {
       remainingMs: reactionWindowMode.ms,
       lastTime: Date.now(),
-      drainMult: handHovered ? 1 : 4,
       totalMs: reactionWindowMode.ms,
     }
     const id = setInterval(() => {
       const ref = reactionTimerRef.current
       if (!ref) return
       const now = Date.now()
-      const elapsed = (now - ref.lastTime) * ref.drainMult
+      const elapsed = now - ref.lastTime
       ref.remainingMs = Math.max(0, ref.remainingMs - elapsed)
       ref.lastTime = now
       setReactionPct(ref.remainingMs / ref.totalMs * 100)
@@ -137,13 +135,7 @@ export default function Game({ solo = false }) {
       reactionTimerRef.current = null
       setReactionPct(100)
     }
-  }, [reactionWindowMode]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (reactionTimerRef.current) {
-      reactionTimerRef.current.drainMult = handHovered ? 1 : 4
-    }
-  }, [handHovered])
+  }, [reactionWindowMode])
 
   useSocket({
     game_starting:         ({ state }) => { setState(state); clearAll(); setLastMove(''); setGameOverSeen(false) },
@@ -1149,8 +1141,6 @@ if (!isMyTurn || !inActions || attackPending) return
         className="game-hand"
         ref={ownHandAreaRef}
         onMouseEnter={(e) => {
-          setHandHovered(true)
-          emit('hand_hover_start')
           if (liftedCard && isMyTurn && inActions) {
             emit('hover_space', { row: null, lane: null })
             setBoardHoveredCell(null)
@@ -1169,8 +1159,6 @@ if (!isMyTurn || !inActions || attackPending) return
           }
         }}
         onMouseLeave={() => {
-          setHandHovered(false)
-          emit('hand_hover_end')
           if (insertRevealedRef.current) {
             insertRevealedRef.current = false
             if (liftedCard) {

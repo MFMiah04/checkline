@@ -1,6 +1,7 @@
 // Integration test: runs the real server and connects two players over Socket.io
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { io as connect } from 'socket.io-client'
+import { REACTION_WINDOW_MS, isPlaceable, seededRandom } from '@checkline/engine'
 import { createGameServer } from './server.js'
 
 let server
@@ -8,7 +9,7 @@ let url
 const sockets = []
 
 beforeAll(async () => {
-  server = createGameServer()
+  server = createGameServer({ random: seededRandom(1) })
   await new Promise(resolve => server.httpServer.listen(0, resolve))
   url = `http://localhost:${server.httpServer.address().port}`
 })
@@ -116,6 +117,35 @@ describe('game server', () => {
     expect(lastAction.type).toBe('end_turn')
     expect(after.currentTurn).toBe(second)
     expect(after.discardPile).toHaveLength(1)
+  })
+
+  it('gives the other player the same short reaction window after every action', async () => {
+    const { host, guest } = await startGame()
+    const players = [host, guest]
+    const playing = players.map(p => waitForState(p, s => s.phase === 'playing'))
+    host.emit('mulligan_done', { discardIndices: [] })
+    guest.emit('mulligan_done', { discardIndices: [] })
+    const states = (await Promise.all(playing)).map(u => u.state)
+    const side = states[0].currentTurn
+    const actor = players[side]
+    const defender = players[1 - side]
+
+    // Place a piece on the actor's back row, away from the King in the middle lane
+    const cardIndex = states[side].players[side].hand.findIndex(c => isPlaceable(c.type))
+    expect(cardIndex).toBeGreaterThanOrEqual(0)
+    const row = side === 0 ? 0 : 3
+
+    // The window opens whatever the defender holds, so it gives nothing away about their hand
+    const window = next(defender, 'reaction_window')
+    actor.emit('game_action', { type: 'place', cardIndex, row, lane: 0 })
+    const { action, ms } = await window
+    expect(action.type).toBe('place')
+    expect(ms).toBe(REACTION_WINDOW_MS)
+
+    const resolved = waitForState(actor, s => !s.reactionWindowOpen && s.board[row][0] !== null)
+    defender.emit('pass_reaction')
+    const { lastAction } = await resolved
+    expect(lastAction.type).toBe('place')
   })
 
   it('ends the game when a player forfeits', async () => {

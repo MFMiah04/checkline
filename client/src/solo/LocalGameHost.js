@@ -3,7 +3,7 @@
 // events as the server, so the game screen works with it unchanged.
 import {
   newGame, applyPlayerAction, resolveTimeout, reorderHand, playerView, playerToAct,
-  chooseAction, chooseMulligan,
+  chooseAction, chooseMulligan, REACTION_WINDOW_MS, BODYGUARD_MS, REVERSAL_CANCEL_MS,
 } from '@checkline/engine'
 
 export const HUMAN = 0
@@ -11,17 +11,10 @@ export const COMPUTER = 1
 
 const COMPUTER_ACTION_MS = 900  // pause before each computer move, so the player can follow it
 const COMPUTER_REACT_MS  = 600  // pause before the computer answers a reaction window or prompt
-const REACTION_WINDOW_MS = 15000
-const BODYGUARD_MS       = 15000
-const REVERSAL_CANCEL_MS = 10000
 
 const COMPUTER_PLAYER = {
   name: 'Computer',
   avatar: { faceColor: '#a0c4e8', eyeStyle: 'cool', mouthStyle: 'smirk', hat: 'tophat', customImage: null },
-}
-
-function hasReactionCard(game, side) {
-  return game.players[side].hand.some(c => c.type === 'Intercept' || c.type === 'Reversal')
 }
 
 export class LocalGameHost {
@@ -33,7 +26,6 @@ export class LocalGameHost {
     this.timers = new Set()
     this.game = null
     this.discardViewIndex = 0
-    this.handHovered = false
     this.reactionExpiresAt = null
     this.reactionTimer = null
     this.reactionFrozen = false
@@ -178,17 +170,11 @@ export class LocalGameHost {
     const pending = announced.state.pending
     if (pending?.kind !== 'reaction') return this.commit(announced)
 
-    const defender = 1 - side
-    // Skip the window if the defender has nothing to react with
-    if (!hasReactionCard(announced.state, defender)) {
-      this.game = announced.state
-      return this.commit(applyPlayerAction(announced.state, defender, { type: 'pass_reaction' }, this.random))
-    }
-
-    if (defender === HUMAN) {
+    // Every action gets the same short window, so it reveals nothing about the defender's hand
+    if (1 - side === HUMAN) {
       this.send('reaction_window', { action: { ...pending.action, ...pending.revealed }, actorSide: side, ms: REACTION_WINDOW_MS })
       this.commit(announced)
-      this.startReactionTimer(this.handHovered ? REACTION_WINDOW_MS : REACTION_WINDOW_MS / 4)
+      this.startReactionTimer(REACTION_WINDOW_MS)
     } else {
       this.commit(announced)  // the computer decides in scheduleComputer
     }
@@ -265,18 +251,6 @@ export class LocalGameHost {
     },
 
     // The reaction window drains four times faster while the cursor is off the hand, as online
-    hand_hover_start() {
-      this.handHovered = true
-      if (this.game?.pending?.kind !== 'reaction' || this.reactionFrozen || !this.reactionTimer) return
-      const remaining = Math.max(0, this.reactionExpiresAt - Date.now())
-      this.startReactionTimer(Math.min(REACTION_WINDOW_MS, remaining * 4))
-    },
-    hand_hover_end() {
-      this.handHovered = false
-      if (this.game?.pending?.kind !== 'reaction' || this.reactionFrozen || !this.reactionTimer) return
-      const remaining = Math.max(0, this.reactionExpiresAt - Date.now())
-      this.startReactionTimer(Math.max(500, Math.ceil(remaining / 4)))
-    },
     reversal_placing() {
       if (this.game?.pending?.kind !== 'reaction') return
       this.cancel(this.reactionTimer)

@@ -29,7 +29,7 @@ const RULES = [
   ]],
   ['Buffs, Debuffs and reactions', [
     "Buffs and Debuffs go on any piece except a King, yours or your opponent's. Each piece holds at most one of each.",
-    'When your opponent acts, a reaction window may open. Play one reaction before the action happens, or let it through. Actions that get a King out of check cannot be reacted to.',
+    'After each opponent action you get a few seconds to react, whether or not you hold a reaction card, so the pause gives nothing away. Play Intercept or Reversal before the action happens, or let it through. Cycling a card, shuffling a card into the deck, ending the turn, and getting a King out of check cannot be reacted to.',
   ]],
 ]
 

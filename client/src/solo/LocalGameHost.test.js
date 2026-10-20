@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { chooseAction, chooseMulligan, playerToAct, seededRandom } from '@checkline/engine'
+import { chooseAction, chooseMulligan, playerToAct, seededRandom, REACTION_WINDOW_MS } from '@checkline/engine'
 import { LocalGameHost, HUMAN } from './LocalGameHost'
 
 beforeEach(() => vi.useFakeTimers())
@@ -74,6 +74,32 @@ describe('LocalGameHost', () => {
     expect(host.game.phase).toBe('ended')
     expect(events.filter(e => e.event === 'error')).toEqual([])
     expect(events.some(e => e.event === 'game_over')).toBe(true)
+    host.stop()
+  }, 60000)
+
+  it('gives the player a reaction window after computer actions, even with no reaction card', async () => {
+    const host = new LocalGameHost({ random: seededRandom(3) })
+    const humanRandom = seededRandom(103)
+    const windows = []
+    host.on('reaction_window', ({ ms }) => {
+      const canReact = host.game.players[HUMAN].hand.some(c => c.type === 'Intercept' || c.type === 'Reversal')
+      windows.push({ ms, canReact })
+    })
+    host.start()
+    await vi.advanceTimersByTimeAsync(0)
+    host.emit('mulligan_done', { discardIndices: [] })
+
+    for (let step = 0; step < 3000 && host.game.phase !== 'ended'; step++) {
+      await vi.advanceTimersByTimeAsync(1000)
+      if (host.game.phase === 'playing' && playerToAct(host.game) === HUMAN && !host.game.pending) {
+        sendAsPlayer(host, chooseAction(host.game, HUMAN, { random: humanRandom }))
+      }
+    }
+
+    // Windows time out by themselves when the player does nothing
+    expect(host.game.phase).toBe('ended')
+    expect(windows.every(w => w.ms === REACTION_WINDOW_MS)).toBe(true)
+    expect(windows.some(w => !w.canReact)).toBe(true)
     host.stop()
   }, 60000)
 

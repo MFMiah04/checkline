@@ -6,15 +6,13 @@ import {
   createRoom, joinRoom, getRoom, getRoomBySocket, removeRoom, updateSocketId
 } from './rooms.js'
 import {
-  newGame, applyPlayerAction, resolveTimeout, reorderHand, playerView
+  newGame, applyPlayerAction, resolveTimeout, reorderHand, playerView,
+  REACTION_WINDOW_MS, BODYGUARD_MS, REVERSAL_CANCEL_MS,
 } from '@checkline/engine'
 
-const REACTION_WINDOW_MS = 15000
-const BODYGUARD_MS = 15000
-const REVERSAL_CANCEL_MS = 10000
-
-// Builds the HTTP and Socket.io server. index.js starts it; tests start their own copies.
-export function createGameServer() {
+// Builds the HTTP and Socket.io server. index.js starts it; tests start their own copies,
+// passing a seeded random so the cards are the same every run.
+export function createGameServer({ random = Math.random } = {}) {
   const app = express()
   app.use(cors())
   app.get('/health', (_req, res) => res.json({ ok: true }))
@@ -88,7 +86,7 @@ export function createGameServer() {
     reactionTimers.set(room.code, setTimeout(() => {
       reactionTimers.delete(room.code)
       const current = getRoom(room.code)
-      if (current?.game?.pending?.kind === 'reaction') commit(current, resolveTimeout(current.game, Math.random))
+      if (current?.game?.pending?.kind === 'reaction') commit(current, resolveTimeout(current.game, random))
     }, ms))
   }
 
@@ -131,7 +129,7 @@ export function createGameServer() {
       bodyguardTimers.set(room.code, setTimeout(() => {
         bodyguardTimers.delete(room.code)
         const current = getRoom(room.code)
-        if (current?.game?.pending?.kind === 'bodyguard') commit(current, resolveTimeout(current.game, Math.random))
+        if (current?.game?.pending?.kind === 'bodyguard') commit(current, resolveTimeout(current.game, random))
       }, BODYGUARD_MS))
     }
 
@@ -143,7 +141,7 @@ export function createGameServer() {
 
   // Applies a player's input, reporting engine errors back to that player
   function act(socket, room, side, input) {
-    const result = applyPlayerAction(room.game, side, input, Math.random)
+    const result = applyPlayerAction(room.game, side, input, random)
     if (result.error) {
       socket.emit('error', { message: result.error })
       return false
@@ -262,7 +260,7 @@ export function createGameServer() {
 
     function startNewGame(room) {
       room.phase = 'game'
-      room.game = newGame(Math.random)
+      room.game = newGame(random)
       room.playAgainVotes = new Set()
       room.discardViewIndex = 0
       room.players.forEach((p, i) => {
@@ -275,7 +273,7 @@ export function createGameServer() {
       const result = getRoomBySocket(socket.id)
       if (!result?.room.game) return
       const { room, player } = result
-      commit(room, applyPlayerAction(room.game, player.side, { type: 'mulligan', discardIndices }, Math.random))
+      commit(room, applyPlayerAction(room.game, player.side, { type: 'mulligan', discardIndices }, random))
     })
 
     // ── Disconnect ─────────────────────────────────────────────────────
@@ -347,21 +345,14 @@ export function createGameServer() {
       const { room, player } = result
       if (!room.game) return socket.emit('error', { message: 'Game not in progress.' })
 
-      const announced = applyPlayerAction(room.game, player.side, payload, Math.random)
+      const announced = applyPlayerAction(room.game, player.side, payload, random)
       if (announced.error) return socket.emit('error', { message: announced.error })
 
       const pending = announced.state.pending
       if (pending?.kind !== 'reaction') return commit(room, announced)
 
-      // The opponent may react only while their cursor is on their hand; otherwise pass at once
-      const defenderSide = 1 - pending.actorSide
-      const defender = room.players[defenderSide]
-      if (!defender?.handHovered) {
-        const passed = applyPlayerAction(announced.state, defenderSide, { type: 'pass_reaction' }, Math.random)
-        room.game = announced.state
-        return commit(room, passed)
-      }
-
+      // Every action gets the same short window, so it reveals nothing about the defender's hand
+      const defender = room.players[1 - pending.actorSide]
       room.reactionFrozen = false
       io.to(defender.socketId).emit('reaction_window', { action: revealedAction(pending), actorSide: pending.actorSide, ms: REACTION_WINDOW_MS })
       commit(room, announced)
@@ -380,34 +371,8 @@ export function createGameServer() {
       const result = getRoomBySocket(socket.id)
       if (!result?.room.game) return
       const { room, player } = result
-      const res = applyPlayerAction(room.game, player.side, { type: 'pass_reaction' }, Math.random)
+      const res = applyPlayerAction(room.game, player.side, { type: 'pass_reaction' }, random)
       if (!res.error) commit(room, res)
-    })
-
-    // Defender moved their cursor onto their hand: the window drains at normal speed
-    socket.on('hand_hover_start', () => {
-      const result = getRoomBySocket(socket.id)
-      if (!result) return
-      const { room, player } = result
-      player.handHovered = true
-      const pending = room.game?.pending
-      if (pending?.kind !== 'reaction' || player.side === pending.actorSide || room.reactionFrozen) return
-
-      const remaining = Math.max(0, room.reactionExpiresAt - Date.now())
-      startReactionTimer(room, Math.min(REACTION_WINDOW_MS, remaining * 4))
-    })
-
-    // Defender moved their cursor off their hand: the window drains four times faster
-    socket.on('hand_hover_end', () => {
-      const result = getRoomBySocket(socket.id)
-      if (!result) return
-      const { room, player } = result
-      player.handHovered = false
-      const pending = room.game?.pending
-      if (pending?.kind !== 'reaction' || player.side === pending.actorSide || room.reactionFrozen) return
-
-      const remaining = Math.max(0, room.reactionExpiresAt - Date.now())
-      startReactionTimer(room, Math.max(500, Math.ceil(remaining / 4)))
     })
 
     // Defender chose Reversal and is picking a target — pause the window

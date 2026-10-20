@@ -29,7 +29,7 @@ export function createRoom(hostSocket, hostName, hostToken, hostAvatar) {
     reactionFrozen: false,
     bodyguardExpiresAt: null,
     players: [
-      { socketId: hostSocket.id, sessionToken: hostToken, name: hostName, avatar: sanitizeAvatar(hostAvatar), side: 0, connected: true, handHovered: false }
+      { socketId: hostSocket.id, sessionToken: hostToken, name: hostName, avatar: sanitizeAvatar(hostAvatar), side: 0, connected: true }
     ],
   }
   rooms.set(code, room)
@@ -54,7 +54,6 @@ export function joinRoom(code, guestSocket, guestName, guestToken, guestAvatar) 
     avatar: sanitizeAvatar(guestAvatar),
     side: 1,
     connected: true,
-    handHovered: false
   })
   return { room }
 }

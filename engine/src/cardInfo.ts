@@ -124,7 +124,7 @@ const INFO: Record<CardType | 'King', Described> = {
   Intercept: {
     name: 'Intercept', cost: 'reaction', short: "Cancel opponent's action",
     text: "Cancels an action or card your opponent is playing. That card or piece can't be used again this turn.",
-    howToPlay: "When your opponent acts, a reaction window opens if you can react. Choose this card there.",
+    howToPlay: 'After each opponent action you get a few seconds to react. Choose this card then.',
   },
   Reversal: {
     name: 'Reversal', cost: 'reaction', short: 'Redirect a Buff or Debuff',
