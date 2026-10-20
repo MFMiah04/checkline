@@ -5,3 +5,5 @@ npm-debug.log
 .git
 Dockerfile
 .dockerignore
+*.test.js
+testHelpers.js
