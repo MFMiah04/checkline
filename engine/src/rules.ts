@@ -140,11 +140,11 @@ export function isValidAttack(board: Board, piece: Piece, fromRow: number, fromL
   const target = board[targetRow][targetLane]
   if (!target) return false
   if (target.owner === piece.owner) return false
-  if (target.type === 'King') {
-    return getBodyguardOptions(board, targetRow, targetLane, target.owner).length > 0
-  }
+  if (!matchesPattern(board, piece.type, piece.owner, fromRow, fromLane, targetRow, targetLane, true)) return false
 
-  return matchesPattern(board, piece.type, piece.owner, fromRow, fromLane, targetRow, targetLane, true)
+  // A King can only be attacked when a Bodyguard is next to it (the Bodyguard is sacrificed instead)
+  if (target.type === 'King') return getBodyguardOptions(board, targetRow, targetLane, target.owner).length > 0
+  return true
 }
 
 // ── Reposition validation ─────────────────────────────────────────────────────

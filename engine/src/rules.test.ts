@@ -142,9 +142,9 @@ describe('isValidAttack', () => {
     expect(isValidAttack(board, rook, 1, 2, 3, 2)).toBe(true)
   })
 
-  // Known bug: for King targets, isValidAttack only checks for a Bodyguard
-  // and skips the attacker's reach, so any piece can force a Bodyguard sacrifice.
-  it.fails('does not attack a King that is out of reach, even with a Bodyguard', () => {
+  // Previously a bug: for King targets the attacker's reach was not checked,
+  // so any piece could force a Bodyguard sacrifice from anywhere.
+  it('does not attack a King that is out of reach, even with a Bodyguard', () => {
     const pawn = put(0, 0, piece('Pawn', 0))
     put(3, 2, piece('King', 1))
     put(3, 1, buffed('Pawn', 1, 'Bodyguard'))
