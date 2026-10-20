@@ -213,7 +213,8 @@ export function applyCommand(room, player, { cardIndex }) {
     return { error: 'Invalid card index.' }
   if (player.hand[cardIndex].type !== 'Command') return { error: 'Not a Command card.' }
 
-  player.hand.splice(cardIndex, 1)
+  const [card] = player.hand.splice(cardIndex, 1)
+  room.discardPile.unshift({ type: card.type, id: card.id })
   room.commandUsedThisTurn = true
   room.actionsRemaining += 1
 
@@ -228,7 +229,8 @@ export function applyDisrupt(room, player, { cardIndex }) {
     return { error: 'Invalid card index.' }
   if (player.hand[cardIndex].type !== 'Disrupt') return { error: 'Not a Disrupt card.' }
 
-  player.hand.splice(cardIndex, 1)
+  const [card] = player.hand.splice(cardIndex, 1)
+  room.discardPile.unshift({ type: card.type, id: card.id })
   room.disruptUsedThisTurn = true
   room.disruptNextTurn = true
 
