@@ -1,4 +1,5 @@
 import BoardSpace from './BoardSpace'
+import { FILES } from '../utils/describe'
 
 const PIECE_TYPES = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
 
@@ -38,7 +39,7 @@ export default function Board({
 
   return (
     <div className="board" role="group" aria-label="Board" onMouseLeave={onBoardMouseLeave}>
-      {rowOrder.map(rowIdx => (
+      {rowOrder.map((rowIdx, displayIdx) => (
         <div key={rowIdx} className="board-row">
           {board[rowIdx].map((piece, laneIdx) => {
             const cellKey = `${rowIdx},${laneIdx}`
@@ -90,6 +91,8 @@ export default function Board({
                 isCardTarget={cardTargets?.has(cellKey) ?? false}
                 isUnderAttack={underAttack === cellKey}
                 isInCheck={piece?.type === 'King' && !!inCheck?.[piece.owner]}
+                rankLabel={laneIdx === 0 ? rowIdx + 1 : null}
+                fileLabel={displayIdx === rowOrder.length - 1 ? FILES[laneIdx] : null}
                 onClick={onSpaceClick ? () => onSpaceClick(rowIdx, laneIdx) : undefined}
                 onInspect={onInspect}
                 spaceRefCallback={spaceRefCallback}

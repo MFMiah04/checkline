@@ -284,6 +284,19 @@
   opacity: 0.35;
 }
 
+/* Square names in the corners, as on a chess board */
+.board-coord {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(251, 246, 234, 0.6);
+  pointer-events: none;
+}
+
+.board-rank { top: 4px; left: 5px; }
+.board-file { bottom: 4px; right: 5px; }
+
 /* ── Pieces ──────────────────────────────────────────────────────── */
 
 .piece {

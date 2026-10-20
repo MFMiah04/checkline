@@ -1,14 +1,14 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import CardFace from './CardFace'
 import PieceToken from './PieceToken'
-import { describePiece } from '../utils/describe'
+import { describePiece, squareName } from '../utils/describe'
 
 // One square of the board. It is a button so keyboard and screen-reader users can play,
 // but squares with nothing to do are taken out of the Tab order.
 export default function BoardSpace({
   piece, row, lane, side, isMyTurn,
   isSelected, placingCard, isValidMove, isValidAttack, isAttackRange,
-  isCardTarget, isUnderAttack, isInCheck, onClick, onInspect,
+  isCardTarget, isUnderAttack, isInCheck, rankLabel, fileLabel, onClick, onInspect,
   spaceRefCallback, isFloatingOrigin, isFloatingTarget, isFloatingHighlight, floatingCard,
   isConfirmTarget, onMouseEnter,
   isShaking, errorTip,
@@ -45,7 +45,7 @@ export default function BoardSpace({
     isUnderAttack && 'under attack',
     isInCheck && 'in check',
   ].filter(Boolean)
-  const label = `${piece ? describePiece(piece, side) : 'Empty square'}, ${isOwnSide ? 'your side' : "opponent's side"}, lane ${lane + 1}${hints.length ? `. ${hints.join(', ')}` : ''}`
+  const label = `${squareName(row, lane)}: ${piece ? describePiece(piece, side) : 'empty'}, ${isOwnSide ? 'your side' : "opponent's side"}${hints.length ? `. ${hints.join(', ')}` : ''}`
   const actionable = !!onClick && (isSelected || isValidMove || isValidAttack || isPlaceTarget || isCardTarget || isOwnPiece)
 
   // React needs `key` passed directly, not spread from an object, so it is added at each use
@@ -73,6 +73,9 @@ export default function BoardSpace({
       tabIndex={actionable ? 0 : -1}
       ref={el => spaceRefCallback?.(row, lane, el)}
     >
+      {rankLabel != null && <span className="board-coord board-rank" aria-hidden="true">{rankLabel}</span>}
+      {fileLabel != null && <span className="board-coord board-file" aria-hidden="true">{fileLabel}</span>}
+
       {isOwnPiece && piece?.interceptedThisTurn && (
         <span className="piece-intercepted-label" aria-hidden="true">Intercepted</span>
       )}

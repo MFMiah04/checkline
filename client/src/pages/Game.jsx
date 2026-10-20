@@ -893,7 +893,8 @@ if (!isMyTurn || !inActions || attackPending) return
   }
 
   const opponentName = opponent.name
-  const promptActive = !!(reactionWindowMode || bodyguardMode || enslaveMode)
+  // Only highlight the status bar when there's a real choice to make
+  const promptActive = !!((reactionWindowMode && reactionIndices.size > 0) || bodyguardMode || enslaveMode)
   const detailsPiece = inspected?.piece ?? (!inspected && selectedPiece ? state.board[selectedPiece.row]?.[selectedPiece.lane] : null)
   const detailsType = inspected?.type ?? (!inspected?.piece && liftedCard ? liftedCard.card.type : null)
 
@@ -921,11 +922,20 @@ if (!isMyTurn || !inActions || attackPending) return
       )
     }
     if (reactionWindowMode) {
+      // Say plainly when there's nothing in your hand that can answer this action
+      const canReact = reactionIndices.size > 0
       return (
         <>
-          <span className="status-text"><strong>{opponentName} is {richActionLabel(reactionWindowMode.action)}.</strong> Choose a glowing card to react, or let it happen.</span>
+          <span className="status-text">
+            <strong>{opponentName} is {richActionLabel(reactionWindowMode.action)}.</strong>{' '}
+            {canReact
+              ? 'React with a glowing card, or let it happen.'
+              : 'You have no card that can react to this.'}
+          </span>
           <span className="status-timer" role="img" aria-label="Time left to react"><span style={{ width: `${reactionPct}%` }} /></span>
-          <button className="status-btn btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>Let it happen</button>
+          <button className="status-btn btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>
+            {canReact ? 'Let it happen' : 'Continue'}
+          </button>
         </>
       )
     }
