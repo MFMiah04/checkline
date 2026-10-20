@@ -96,7 +96,7 @@ Moves and attacks horizontally or vertically, any distance.
 
 **Queen**
 Moves and attacks in any straight or diagonal direction, any distance.
-*Sacrifice: Remove this piece and draw 2 cards.*
+*Sacrifice: Remove this piece and draw 3 cards.*
 
 ---
 

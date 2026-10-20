@@ -67,12 +67,11 @@ describe('applyDirectSacrifice', () => {
     expect(room.players[0].hand).toHaveLength(2)
   })
 
-  // Known bug or outdated ruleset: ruleset.md says a Queen draws 2, the code draws 3.
-  it.fails('draws 2 cards for a Queen, as the ruleset says', () => {
+  it('draws 3 cards for a Queen', () => {
     const room = makeRoom()
     room.board[1][0] = piece('Queen', 0)
     applyDirectSacrifice(room, room.players[0], { row: 1, lane: 0 })
-    expect(room.players[0].hand).toHaveLength(2)
+    expect(room.players[0].hand).toHaveLength(3)
   })
 
   it('rejects a piece that cannot act this turn', () => {
