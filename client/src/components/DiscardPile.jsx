@@ -62,7 +62,7 @@ export default function DiscardPile({
           <>
             {count > 2 && <div className="card face-down pile-card pile-card-3" />}
             {count > 1 && <div className="card face-down pile-card pile-card-2" />}
-            <div className="card pile-card pile-card-1">
+            <div className="card pile-card pile-card-1" data-fly={viewCard.id}>
               <CardFace type={viewCard.type} compact />
               {viewIndex > 0 && (
                 <span className="pile-browse-idx">{viewIndex + 1}/{count}</span>

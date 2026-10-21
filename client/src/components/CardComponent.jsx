@@ -23,6 +23,7 @@ export default function CardComponent({ card, faceDown = false, selected = false
       onFocus={onInspect ? () => onInspect(card.type) : undefined}
       aria-label={label}
       aria-pressed={isClickable ? selected : undefined}
+      data-fly={card.id}
     >
       <CardFace type={card.type} />
       {intercepted && <span className="card-intercepted-label" aria-hidden="true">Intercepted</span>}

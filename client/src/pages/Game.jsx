@@ -1,19 +1,21 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getSocket, useSocket } from '../hooks/useSocket'
+import { useEventQueue } from '../hooks/useEventQueue'
 import Board from '../components/Board'
 import Hand from '../components/Hand'
 import GameInfo from '../components/GameInfo'
 import DeckPile from '../components/DeckPile'
 import DiscardPile from '../components/DiscardPile'
-import CaptureSlide from '../components/CaptureSlide'
 import ReturnSlide from '../components/ReturnSlide'
-import DeckSlide from '../components/DeckSlide'
+import FlightLayer, { FLIGHT_MS } from '../components/FlightLayer'
+import CardFace from '../components/CardFace'
 import CardDetails from '../components/CardDetails'
 import Modal from '../components/Modal'
 import RulesModal from '../components/RulesModal'
 import { isValidMove, isValidAttack, isPinned, isFatigued } from '@checkline/engine'
 import { getAttackRange } from '../utils/attackRange'
+import { locateCards, planFlights } from '../utils/cardLocations'
 import '../styles/game.css'
 
 const PLACEABLE   = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
@@ -21,6 +23,16 @@ const INSTANT     = new Set(['Command', 'Disrupt'])
 const BUFF_TYPES  = new Set(['Enslave', 'Shield', 'Bodyguard', 'Protection'])
 const DEBUFF_TYPES = new Set(['Pin', 'Fatigue', 'Silence'])
 const CONTROL_CARD_TYPES = new Set(['Reposition', 'Swap', 'Dispel', 'Return'])
+
+// Control cards wait on the "played" spot while the other player decides whether to react
+const STAGED_CARD = {
+  play_reposition: 'Reposition', play_swap: 'Swap', play_dispel: 'Dispel', play_return: 'Return', play_purge: 'Purge',
+}
+
+// Game events that wait their turn, so each change animates before the next one shows
+const QUEUED_EVENTS = ['game_starting', 'state_update', 'reaction_window', 'reversal_cancelled', 'bodyguard_prompt', 'enslave_prompt']
+// Pause between queued changes, so two in a row read as two
+const STEP_GAP_MS = 150
 
 function emit(event, payload) {
   getSocket().emit(event, payload)
@@ -60,8 +72,8 @@ export default function Game({ solo = false }) {
   // null | { row, lane } — board cell mouse is over
   const [confirmTarget, setConfirmTarget]       = useState(null)
   // null | { row, lane } — brief gold pulse when action confirmed
-  const [captureSlides, setCaptureSlides]        = useState([])
-  // [{ piece, fromPos, toPos, isOwn }] — pieces/cards sliding to discard pile
+  const [flights, setFlights]                    = useState([])
+  // [{ key, id, from, to, look }] — cards flying from where they were to where they are now
   const [isShaking, setIsShaking]               = useState(false)
   const [discardHovered, setDiscardHovered]      = useState(false)
   const [attackPending, setAttackPending]        = useState(null)
@@ -80,7 +92,6 @@ export default function Game({ solo = false }) {
   const [oppDiscardHovered, setOppDiscardHovered] = useState(false)
   const [deckHovered, setDeckHovered]         = useState(false)
   const [oppDeckHovered, setOppDeckHovered]   = useState(false)
-  const [deckSlide, setDeckSlide]               = useState(null)
   const [handInsertIndex, setHandInsertIndex]   = useState(null)
   // null | number — where to insert the lifted card when hovering back over hand
 
@@ -104,6 +115,13 @@ export default function Game({ solo = false }) {
   // Tracks whether we cleared select_card_type for insert mode (so we can restore on leave)
   const insertRevealedRef = useRef(false)
   const prevTurnRef       = useRef(null)
+  const gameRef           = useRef(null)
+  const stageRef          = useRef(null)
+  // What was on screen after the last render: card locations, card rects and zone rects
+  const seenRef           = useRef({ cards: new Map(), rects: new Map(), zones: {} })
+  const busyUntilRef      = useRef(0)      // when the current flights land
+  const skipFlightsRef    = useRef(false)  // jump straight to the latest state, without flights
+  const flightKeyRef      = useRef(0)
 
   const side = solo ? 0 : parseInt(localStorage.getItem('checkline_side') ?? '0')
 
@@ -137,7 +155,7 @@ export default function Game({ solo = false }) {
     }
   }, [reactionWindowMode])
 
-  useSocket({
+  const events = useEventQueue({
     game_starting:         ({ state }) => { setState(state); clearAll(); setLastMove(''); setGameOverSeen(false) },
     opponent_hand_order:   ({ ids }) => setOppHandIds(ids),
     discard_view:          ({ index, browserId }) => { setDiscardViewIndex(index); setDiscardBrowserId(browserId) },
@@ -154,81 +172,6 @@ export default function Game({ solo = false }) {
     opponent_hover_discard: ({ hovering }) => setOppDiscardHovered(hovering),
     opponent_hover_deck:    ({ hovering }) => setOppDeckHovered(hovering),
     state_update: ({ state: s, lastAction }) => {
-      // ── Trigger capture slide BEFORE applying new state ──────────────
-      // (so we can read the piece from the old board while refs still match)
-      // ── Deck → hand slide on cycle ────────────────────────────────────
-      if (lastAction?.type === 'cycle') {
-        const deckEl = deckPileRef.current
-        const isOwn  = lastAction.actorSide === side
-        const toEl   = isOwn ? ownHandAreaRef.current : oppHandAreaRef.current
-        if (deckEl && toEl) {
-          const fr = deckEl.getBoundingClientRect()
-          const tr = toEl.getBoundingClientRect()
-          setDeckSlide({
-            fromPos: { x: fr.left + fr.width / 2, y: fr.top + fr.height / 2 },
-            toPos:   { x: tr.right - 20, y: isOwn ? tr.top + tr.height / 2 : tr.bottom },
-          })
-        }
-      }
-
-      if (lastAction && !s.reactionWindowOpen) {
-        const la = lastAction
-        const p  = la.payload
-        const toEl = discardPileRef.current
-
-        // Purge: all buff/debuff tokens slide to discard
-        if (la.type === 'play_purge' && toEl) {
-          const currentBoard = state?.board
-          const slides = []
-          const tr = toEl.getBoundingClientRect()
-          for (let r = 0; r <= 3; r++) {
-            for (let l = 0; l <= 4; l++) {
-              const pc = currentBoard?.[r]?.[l]
-              if (!pc) continue
-              const fromEl = boardSpaceRefs.current[`${r},${l}`]
-              if (!fromEl) continue
-              const fr = fromEl.getBoundingClientRect()
-              if (pc.buff)   slides.push({ piece: { type: pc.buff.type,   owner: pc.owner }, fromPos: { x: fr.left, y: fr.top }, toPos: { x: tr.left, y: tr.top }, isOwn: pc.owner === side })
-              if (pc.debuff) slides.push({ piece: { type: pc.debuff.type, owner: pc.owner }, fromPos: { x: fr.left, y: fr.top }, toPos: { x: tr.left, y: tr.top }, isOwn: pc.owner === side })
-            }
-          }
-          if (slides.length > 0) setCaptureSlides(slides)
-        }
-
-        // Capture / sacrifice / bodyguard: piece slides to discard
-        let slideRow, slideLane, isShieldSlide = false
-        if (la.type === 'direct_attack' && la.secondaryEffect !== 'shield_absorbed' && la.secondaryEffect !== 'enslave_placed') {
-          slideRow = p.targetRow; slideLane = p.targetLane
-        } else if (la.type === 'direct_attack' && la.secondaryEffect === 'shield_absorbed') {
-          slideRow = p.targetRow; slideLane = p.targetLane; isShieldSlide = true
-        } else if (la.type === 'direct_sacrifice') {
-          slideRow = p.row; slideLane = p.lane
-        } else if (la.type === 'bodyguard_save') {
-          slideRow = p.bodyguardRow; slideLane = p.bodyguardLane
-        }
-
-        if (slideRow != null && slideLane != null) {
-          const currentBoard = state?.board
-          const pieceToSlide = isShieldSlide
-            ? currentBoard?.[slideRow]?.[slideLane]?.buff
-            : currentBoard?.[slideRow]?.[slideLane]
-
-          if (pieceToSlide && toEl) {
-            const fromEl = boardSpaceRefs.current[`${slideRow},${slideLane}`]
-            if (fromEl) {
-              const fr = fromEl.getBoundingClientRect()
-              const tr = toEl.getBoundingClientRect()
-              setCaptureSlides([{
-                piece:   pieceToSlide,
-                fromPos: { x: fr.left, y: fr.top },
-                toPos:   { x: tr.left, y: tr.top },
-                isOwn:   pieceToSlide.owner === side,
-              }])
-            }
-          }
-        }
-      }
-
       setState(s)
       if (lastAction) setLastMove(describeLastAction(lastAction, side, s.players))
 
@@ -328,7 +271,8 @@ export default function Game({ solo = false }) {
       setMyPendingAction(null)
       setTimeout(() => setErrorMsg(''), 3000)
     },
-  })
+  }, QUEUED_EVENTS, busyUntilRef)
+  useSocket(events.handlers)
 
   function clearAll() {
     setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null); setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
@@ -451,15 +395,113 @@ export default function Game({ solo = false }) {
     return s
   }, [reversalTargetMode, state, reactionWindowMode])
 
-  const previewBoard = useMemo(() => {
+  // The action waiting for a reaction, as this player knows it: { action, actorSide, cardId }
+  const announced = useMemo(() => {
     if (!state) return null
     // Active player: show their own pending action immediately after emitting (before server confirms)
-    const isMine = myPendingAction && state.currentTurn === side
-    const action = isMine ? myPendingAction : (reactionWindowMode?.action ?? null)
-    if (!action) return null
-    const actorS = isMine ? side : (reactionWindowMode?.actorSide ?? (1 - side))
-    return computePreviewBoard(state.board, action, actorS)
+    if (myPendingAction && state.currentTurn === side) {
+      const hand = state.players[side].hand
+      const card = Number.isInteger(myPendingAction.cardIndex) && Array.isArray(hand) ? hand[myPendingAction.cardIndex] : null
+      return { action: myPendingAction, actorSide: side, cardId: card?.id ?? null }
+    }
+    if (reactionWindowMode) {
+      return { action: reactionWindowMode.action, actorSide: reactionWindowMode.actorSide ?? (1 - side), cardId: reactionWindowMode.action.cardId ?? null }
+    }
+    return null
   }, [reactionWindowMode, myPendingAction, state, side])
+
+  const previewBoard = useMemo(() => {
+    if (!state || !announced) return null
+    return computePreviewBoard(state.board, announced.action, announced.actorSide, announced.cardId)
+  }, [announced, state])
+
+  // While the other player may react, a played card is shown off the hand: placed pieces,
+  // Buffs and Debuffs on the preview board, and control cards on the "played" spot
+  const announcedCardId = useMemo(() => {
+    if (!state?.reactionWindowOpen || announced?.cardId == null) return null
+    const hand = state.players[announced.actorSide].hand
+    const ids = Array.isArray(hand) ? hand.map(c => c.id) : (hand.ids ?? [])
+    return ids.includes(announced.cardId) ? announced.cardId : null
+  }, [state, announced])
+  const stagedCard = announcedCardId != null && STAGED_CARD[announced.action.type]
+    ? { id: announcedCardId, type: STAGED_CARD[announced.action.type], actorSide: announced.actorSide }
+    : null
+
+  // Where every card is on screen, for the flight animations
+  const shownCards = useMemo(() => {
+    if (!state || state.phase === 'mulligan') return null
+    const hands = state.players.map(p => {
+      const cards = Array.isArray(p.hand) ? p.hand : (p.hand.ids ?? [])
+      return cards.filter(c => (c.id ?? c) !== announcedCardId)
+    })
+    return locateCards({ board: previewBoard ?? state.board, hands, discard: state.discardPile ?? [], stage: stagedCard })
+  }, [state, previewBoard, announcedCardId, stagedCard?.id, stagedCard?.type]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Animate every card that changed place since the last render (the FLIP technique: the
+  // screen is already showing the new state; each moved card gets a ghost that flies from
+  // its old position to the new one while the real card waits hidden). Then record where
+  // everything is, ready for the next change. It runs after every render on purpose, so the
+  // measurements are always fresh; it only sets state when the cards have actually moved.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const seen = seenRef.current
+    const root = gameRef.current
+    if (!root || !shownCards) {
+      seen.cards = new Map()
+      return
+    }
+
+    if (shownCards !== seen.cards) {
+      const zonesNow = measureZones(zoneEls())
+      const myTurn = state.currentTurn === side
+      const made = skipFlightsRef.current ? [] : planFlights(seen.cards, shownCards)
+        // The player already saw their own plays and moves happen under their cursor
+        .filter(f => !(f.from.zone === 'hand' && f.from.side === side && f.to.zone !== 'hand'))
+        .filter(f => !(f.from.zone === 'board' && f.to.zone === 'board' && myTurn))
+        .map(f => {
+          const from = seen.rects.get(f.id) ?? seen.zones[zoneKey(f.from)]
+          const to = rectOf(root, f.id) ?? zonesNow[zoneKey(f.to)]
+          if (!from || !to) return null
+          const type = f.to.type ?? f.from.type
+          const look = f.from.zone === 'board'
+            ? { kind: 'piece', piece: { type: f.from.type, owner: f.from.owner } }
+            : { kind: 'card', type, faceUp: !!type && f.to.zone !== 'deck' && !(f.to.zone === 'hand' && f.to.side !== side) }
+          return { key: ++flightKeyRef.current, id: f.id, from, to, look }
+        })
+        .filter(Boolean)
+      skipFlightsRef.current = false
+      seen.cards = shownCards
+      if (made.length > 0) {
+        busyUntilRef.current = Date.now() + FLIGHT_MS + STEP_GAP_MS
+        setFlights(prev => [...prev, ...made])
+      }
+    }
+
+    seen.rects = new Map([...root.querySelectorAll('[data-fly]')].map(el => [el.dataset.fly, rectFrom(el)]))
+    seen.zones = measureZones(zoneEls())
+
+    function zoneEls() {
+      return {
+        [`hand-${side}`]: ownHandAreaRef.current,
+        [`hand-${1 - side}`]: oppHandAreaRef.current,
+        deck: deckPileRef.current?.querySelector('.pile-stack') ?? deckPileRef.current,
+        discard: discardPileRef.current?.querySelector('.pile-stack') ?? discardPileRef.current,
+        stage: stageRef.current,
+        ...Object.fromEntries(Object.entries(boardSpaceRefs.current).map(([sq, el]) => [`sq-${sq}`, el])),
+      }
+    }
+  })
+
+  // Tapping or clicking while changes are still queued or flying jumps to the latest state,
+  // so the player is never made to wait and never acts on an out-of-date board
+  function skipAhead() {
+    const handled = events.flush()
+    if (handled > 0) skipFlightsRef.current = true
+    if (handled > 0 || flights.length > 0) {
+      setFlights([])
+      busyUntilRef.current = 0
+    }
+  }
 
   if (!state) return <div className="game-loading">Connecting…</div>
 
@@ -468,7 +510,7 @@ export default function Game({ solo = false }) {
   const me          = state.players[side]
   const opponent    = state.players[1 - side]
   const myHand      = Array.isArray(me.hand) ? me.hand : []
-  const filteredHand = (localHandOrder ?? myHand).filter(c => !liftedCard || c.id !== liftedCard.card.id)
+  const filteredHand = (localHandOrder ?? myHand).filter(c => (!liftedCard || c.id !== liftedCard.card.id) && c.id !== announcedCardId)
   const displayHand  = (handInsertIndex !== null && liftedCard !== null)
     ? [
         ...filteredHand.slice(0, handInsertIndex),
@@ -483,9 +525,9 @@ export default function Game({ solo = false }) {
   const baseOppIds  = Array.isArray(oppHand?.ids) ? oppHand.ids : null
   const activeOppIds = oppHandIds ?? baseOppIds
   const displayOppHand = {
-    count: oppCount - (oppSelectedCardType ? 1 : 0),
+    count: oppCount - (oppSelectedCardType ? 1 : 0) - (announcedCardId != null && announced?.actorSide !== side ? 1 : 0),
     ids: activeOppIds
-      ? (oppLiftedCardId ? activeOppIds.filter(id => id !== oppLiftedCardId) : activeOppIds)
+      ? activeOppIds.filter(id => id !== oppLiftedCardId && id !== announcedCardId)
       : null,
   }
   const isMyTurn = state.currentTurn === side
@@ -992,7 +1034,7 @@ if (!isMyTurn || !inActions || attackPending) return
   }
 
   return (
-    <div className={`game${turnFlash && isMyTurn ? ' my-turn-start' : ''}`}>
+    <div className={`game${turnFlash && isMyTurn ? ' my-turn-start' : ''}`} ref={gameRef} onPointerDownCapture={skipAhead}>
       {forfeitConfirm && (
         <Modal title="Forfeit the game?" onClose={() => setForfeitConfirm(false)}>
           <p className="modal-body">{opponentName} will win this game.</p>
@@ -1028,16 +1070,6 @@ if (!isMyTurn || !inActions || attackPending) return
         )}
       />
 
-      {captureSlides.map((slide, idx) => (
-        <CaptureSlide
-          key={idx}
-          piece={slide.piece}
-          fromPos={slide.fromPos}
-          toPos={slide.toPos}
-          isOwn={slide.isOwn}
-          onDone={() => setCaptureSlides(prev => prev.filter((_, i) => i !== idx))}
-        />
-      ))}
       {returnSlide && (
         <ReturnSlide
           piece={returnSlide.piece}
@@ -1082,6 +1114,14 @@ if (!isMyTurn || !inActions || attackPending) return
             oppDiscardHovered={oppDiscardHovered}
             oppLiftedCardType={oppSelectedCardType}
           />
+          {stagedCard && (
+            <div className="pile-area played-spot" ref={stageRef}>
+              <span className="pile-label">{stagedCard.actorSide === side ? 'You play' : `${opponentName} plays`}</span>
+              <div className="card pile-card played-card" data-fly={stagedCard.id}>
+                <CardFace type={stagedCard.type} compact />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="game-board-col">
@@ -1200,13 +1240,7 @@ if (!isMyTurn || !inActions || attackPending) return
         />
       </div>
 
-      {deckSlide && (
-        <DeckSlide
-          fromPos={deckSlide.fromPos}
-          toPos={deckSlide.toPos}
-          onDone={() => setDeckSlide(null)}
-        />
-      )}
+      <FlightLayer flights={flights} mySide={side} onLanded={key => setFlights(prev => prev.filter(f => f.key !== key))} />
     </div>
   )
 }
@@ -1258,13 +1292,37 @@ function richActionLabel(action) {
   }
 }
 
-function computePreviewBoard(board, action, actorSide) {
+// ── Flight helpers ─────────────────────────────────────────────────────────────
+
+function rectFrom(el) {
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  return r.width > 0 ? { left: r.left, top: r.top, width: r.width, height: r.height } : null
+}
+
+function measureZones(els) {
+  return Object.fromEntries(Object.entries(els).map(([key, el]) => [key, rectFrom(el)]))
+}
+
+function rectOf(root, id) {
+  return rectFrom(root.querySelector(`[data-fly="${id}"]`))
+}
+
+// The fallback spot for a card with no element of its own there (the deck, a hidden hand card)
+function zoneKey(loc) {
+  if (loc.zone === 'hand') return `hand-${loc.side}`
+  if (loc.zone === 'board' || loc.zone === 'status') return `sq-${loc.square}`
+  return loc.zone
+}
+
+// cardId: the played card, so a placed piece or a Buff keeps the id it will have for real
+function computePreviewBoard(board, action, actorSide, cardId = null) {
   if (!action || !board) return null
   const b = board.map(r => [...r])
   switch (action.type) {
     case 'place':
       if (action.pieceType != null && action.row != null && b[action.row]?.[action.lane] === null)
-        b[action.row][action.lane] = { type: action.pieceType, owner: actorSide, buff: null, debuff: null, canActThisTurn: false }
+        b[action.row][action.lane] = { id: cardId ?? undefined, type: action.pieceType, owner: actorSide, buff: null, debuff: null, canActThisTurn: false }
       break
     case 'direct_move': {
       const p = b[action.row]?.[action.lane]
@@ -1282,12 +1340,12 @@ function computePreviewBoard(board, action, actorSide) {
       break
     case 'play_buff': {
       const p = b[action.targetRow]?.[action.targetLane]
-      if (p && action.effectType) b[action.targetRow][action.targetLane] = { ...p, buff: { type: action.effectType } }
+      if (p && action.effectType) b[action.targetRow][action.targetLane] = { ...p, buff: { type: action.effectType, id: cardId ?? undefined } }
       break
     }
     case 'play_debuff': {
       const p = b[action.targetRow]?.[action.targetLane]
-      if (p && action.effectType) b[action.targetRow][action.targetLane] = { ...p, debuff: { type: action.effectType } }
+      if (p && action.effectType) b[action.targetRow][action.targetLane] = { ...p, debuff: { type: action.effectType, id: cardId ?? undefined } }
       break
     }
     case 'play_reposition': {

@@ -78,6 +78,7 @@ export default function Hand({ cards, faceDown = false, selectedSet, selectedIdx
             <motion.div
               key={key}
               layout
+              data-fly={ids ? key : undefined}
               style={{ transformOrigin: 'bottom center' }}
               animate={{ rotate, y, scale }}
               transition={{ type: 'spring', stiffness: 300, damping: 28 }}

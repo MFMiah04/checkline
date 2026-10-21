@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import CardFace from './CardFace'
 import PieceToken from './PieceToken'
 import { describePiece, squareName } from '../utils/describe'
+import { flyId } from '../utils/cardLocations'
 
 // One square of the board. It is a button so keyboard and screen-reader users can play,
 // but squares with nothing to do are taken out of the Tab order.
@@ -80,7 +81,7 @@ export default function BoardSpace({
         <span className="piece-intercepted-label" aria-hidden="true">Intercepted</span>
       )}
 
-      {renderPiece && <PieceToken piece={piece} mySide={side} cantAct={cantAct} />}
+      {renderPiece && <PieceToken piece={piece} mySide={side} cantAct={cantAct} flyId={flyId(piece)} />}
 
       <AnimatePresence>
         {isFloatingTarget && floatingCard && (() => {

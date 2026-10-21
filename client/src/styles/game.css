@@ -693,6 +693,58 @@ button.card.selected:active:not(:disabled) {
   box-shadow: none;
 }
 
+/* The card being played, while the other player may still react */
+.played-spot .pile-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.played-card {
+  box-shadow: 0 0 0 3px var(--brass-light), 0 8px 18px rgba(74, 51, 36, 0.3), inset 0 0 0 3px var(--ivory), inset 0 0 0 4px var(--brass);
+}
+
+/* ── Flights: ghost cards moving between places ─────────────────── */
+
+.flight-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
+}
+
+.flight {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 10px 14px rgba(43, 32, 22, 0.35));
+}
+
+.flight > .card {
+  --card-w: 100%;
+  --card-h: 100%;
+  padding: 4px 3px;
+}
+
+.flight > .card .card-art .icon {
+  width: 26px;
+  height: 26px;
+}
+
+.flight > .card .card-name {
+  font-size: 0.6rem;
+}
+
+.flight > .piece {
+  width: 100%;
+  height: 100%;
+}
+
+.flight > .piece .piece-icon {
+  width: 62%;
+  height: 62%;
+}
+
 /* ── Status bar under the board ──────────────────────────────────── */
 
 .status-bar {
