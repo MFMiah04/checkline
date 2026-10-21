@@ -15,6 +15,7 @@ export default function Board({
   oppSelectedPiece,     // { row, lane } — opponent's selected piece origin
   oppHoveredCell,       // { row, lane } — opponent's hovered cell
   oppSelectedCardType,  // string | null — opponent's currently selected card type
+  oppLiftedCardId,      // number | null — that card's id, so it can fly on from where it was shown
   confirmTarget,        // { row, lane } — brief gold pulse on confirmed target
   // Error / shake
   isShaking, errorTip,
@@ -34,7 +35,7 @@ export default function Board({
     ? board[oppSelectedPiece.row]?.[oppSelectedPiece.lane] ?? null
     : null
   const oppHandFloatingCard = oppSelectedCardType
-    ? { type: oppSelectedCardType, owner: 1 - side }
+    ? { id: oppLiftedCardId ?? null, type: oppSelectedCardType, owner: 1 - side }
     : null
 
   return (

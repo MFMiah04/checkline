@@ -11,10 +11,45 @@ export const COMPUTER = 1
 
 const COMPUTER_ACTION_MS = 900  // pause before each computer move, so the player can follow it
 const COMPUTER_REACT_MS  = 600  // pause before the computer answers a reaction window or prompt
+const CUE_MS = 450  // between acting-out steps: picking up a card, pointing at a piece
+const AIM_MS = 700  // how long the computer points at its target before playing
 
 const COMPUTER_PLAYER = {
   name: 'Computer',
   avatar: { faceColor: '#a0c4e8', eyeStyle: 'cool', mouthStyle: 'smirk', hat: 'tophat', customImage: null },
+}
+
+// The messages a person's mouse would send while making this action, in order
+function computerCues(action, hand) {
+  const cues = []
+  const card = 'cardIndex' in action ? hand[action.cardIndex] : null
+  const point = (row, lane) => cues.push(['opponent_hover_space', { row, lane }])
+  if (card) cues.push(['opponent_select_card_type', { cardType: card.type, cardId: card.id }])
+
+  switch (action.type) {
+    case 'direct_move':
+      cues.push(['opponent_select_piece', { row: action.row, lane: action.lane }])
+      point(action.toRow, action.toLane)
+      break
+    case 'direct_attack':
+      cues.push(['opponent_select_piece', { row: action.row, lane: action.lane }])
+      point(action.targetRow, action.targetLane)
+      break
+    case 'direct_sacrifice':
+      cues.push(['opponent_select_piece', { row: action.row, lane: action.lane }])
+      cues.push(['opponent_hover_discard', { hovering: true }])
+      break
+    case 'place':           point(action.row, action.lane); break
+    case 'play_buff':
+    case 'play_debuff':
+    case 'play_dispel':     point(action.targetRow, action.targetLane); break
+    case 'play_reposition': point(action.pieceRow, action.pieceLane); point(action.toRow, action.toLane); break
+    case 'play_swap':       point(action.aRow, action.aLane); point(action.bRow, action.bLane); break
+    case 'play_return':     point(action.pieceRow, action.pieceLane); break
+    case 'cycle':           cues.push(['opponent_hover_discard', { hovering: true }]); break
+    case 'shuffle_into_deck': cues.push(['opponent_hover_deck', { hovering: true }]); break
+  }
+  return cues
 }
 
 export class LocalGameHost {
@@ -31,6 +66,7 @@ export class LocalGameHost {
     this.reactionFrozen = false
     this.bodyguardTimer = null
     this.computerTimer = null
+    this.acting = false  // the computer is part-way through acting out a move
     this.connected = true
   }
 
@@ -74,6 +110,7 @@ export class LocalGameHost {
     this.reactionTimer = null
     this.bodyguardTimer = null
     this.computerTimer = null
+    this.acting = false
   }
 
   newGame() {
@@ -189,7 +226,7 @@ export class LocalGameHost {
   // ── The computer player ────────────────────────────────────────────────────
 
   scheduleComputer() {
-    if (this.computerTimer) return
+    if (this.computerTimer || this.acting) return
     const game = this.game
     let delay = null
     if (game.phase === 'mulligan' && !game.players[COMPUTER].mulliganDone) delay = COMPUTER_REACT_MS
@@ -213,14 +250,31 @@ export class LocalGameHost {
     const action = chooseAction(game, COMPUTER, { random: this.random, difficulty: this.difficulty })
       ?? { type: 'end_turn', discardIndices: [] }
 
-    // Show which piece the computer is using, as a human opponent's selection would be shown
-    if ('row' in action && action.type.startsWith('direct_')) {
-      this.send('opponent_select_piece', { row: action.row, lane: action.lane })
-      this.later(COMPUTER_ACTION_MS / 2, () => this.send('opponent_select_piece', null))
-    }
-
     if (game.pending) this.apply(COMPUTER, action)
-    else this.submitTurnAction(COMPUTER, action)
+    else this.actOut(action)
+  }
+
+  // Plays a turn action the way a person would be seen to: pick up the card or piece, point
+  // at the target, then play it. It sends the same messages a person's mouse would, so the
+  // game screen shows the computer's turn just as it shows a human opponent's.
+  actOut(action) {
+    const cues = computerCues(action, this.game.players[COMPUTER].hand)
+    if (cues.length === 0) return this.submitTurnAction(COMPUTER, action)
+
+    this.acting = true
+    cues.forEach(([event, payload], i) => this.later(i * CUE_MS, () => this.send(event, payload)))
+    this.later((cues.length - 1) * CUE_MS + AIM_MS, () => {
+      this.acting = false
+      this.submitTurnAction(COMPUTER, action)
+      // Let the screen pick up the played card from where it was pointed, then put the cursor down
+      this.later(300, () => {
+        this.send('opponent_select_card_type', { cardType: null, cardId: null })
+        this.send('opponent_select_piece', null)
+        this.send('opponent_hover_space', null)
+        this.send('opponent_hover_discard', { hovering: false })
+        this.send('opponent_hover_deck', { hovering: false })
+      })
+    })
   }
 
   // ── Messages from the player ───────────────────────────────────────────────

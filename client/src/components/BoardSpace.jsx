@@ -89,7 +89,7 @@ export default function BoardSpace({
           return (
             <motion.div key="floating-piece" {...sharedMotionProps} className="floating-wrapper" aria-hidden="true">
               {isHandCard
-                ? <div className="card card-mini"><CardFace type={floatingCard.type} compact /></div>
+                ? <div className="card card-mini" data-fly={floatingCard.id ?? undefined}><CardFace type={floatingCard.type} compact /></div>
                 : <PieceToken piece={floatingCard} mySide={side} className="floating-piece-highlight" />}
               {errorTip && <div className="floating-error-tip">{errorTip}</div>}
             </motion.div>

@@ -1166,6 +1166,7 @@ if (!isMyTurn || !inActions || attackPending) return
                 oppSelectedPiece={oppSelectedPiece}
                 oppHoveredCell={(oppDiscardHovered || oppDeckHovered) ? null : oppHoveredCell}
                 oppSelectedCardType={oppSelectedCardType}
+                oppLiftedCardId={oppLiftedCardId}
                 confirmTarget={confirmTarget}
                 isShaking={isShaking}
                 errorTip={errorMsg}
