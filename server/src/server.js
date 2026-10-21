@@ -7,7 +7,7 @@ import {
 } from './rooms.js'
 import {
   newGame, applyPlayerAction, resolveTimeout, reorderHand, playerView,
-  REACTION_WINDOW_MS, BODYGUARD_MS, REVERSAL_CANCEL_MS,
+  REACTION_WINDOW_MS, REACTION_EXTRA_MS, BODYGUARD_MS, REVERSAL_CANCEL_MS,
 } from '@checkline/engine'
 
 // Builds the HTTP and Socket.io server. index.js starts it; tests start their own copies,
@@ -354,6 +354,7 @@ export function createGameServer({ random = Math.random } = {}) {
       // Every action gets the same short window, so it reveals nothing about the defender's hand
       const defender = room.players[1 - pending.actorSide]
       room.reactionFrozen = false
+      room.moreTimeUsed = false
       io.to(defender.socketId).emit('reaction_window', { action: revealedAction(pending), actorSide: pending.actorSide, ms: REACTION_WINDOW_MS })
       commit(room, announced)
       startReactionTimer(room, REACTION_WINDOW_MS)
@@ -384,6 +385,19 @@ export function createGameServer({ random = Math.random } = {}) {
       if (pending?.kind !== 'reaction' || player.side === pending.actorSide) return
       clearTimer(reactionTimers, room.code)
       room.reactionFrozen = true
+    })
+
+    // The defender asked for more time: once per reaction window
+    socket.on('more_time', () => {
+      const result = getRoomBySocket(socket.id)
+      if (!result) return
+      const { room, player } = result
+      const pending = room.game?.pending
+      if (pending?.kind !== 'reaction' || player.side === pending.actorSide || room.reactionFrozen || room.moreTimeUsed) return
+      room.moreTimeUsed = true
+      const ms = Math.max(0, room.reactionExpiresAt - Date.now()) + REACTION_EXTRA_MS
+      startReactionTimer(room, ms)
+      socket.emit('reaction_extended', { ms })
     })
 
     socket.on('reversal_cancel', () => {

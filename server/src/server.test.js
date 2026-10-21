@@ -1,7 +1,7 @@
 // Integration test: runs the real server and connects two players over Socket.io
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { io as connect } from 'socket.io-client'
-import { REACTION_WINDOW_MS, isPlaceable, seededRandom } from '@checkline/engine'
+import { REACTION_WINDOW_MS, REACTION_EXTRA_MS, isPlaceable, seededRandom } from '@checkline/engine'
 import { createGameServer } from './server.js'
 
 let server
@@ -142,10 +142,19 @@ describe('game server', () => {
     expect(action.type).toBe('place')
     expect(ms).toBe(REACTION_WINDOW_MS)
 
+    // "More time" adds 10 seconds, once per window
+    const extended = next(defender, 'reaction_extended')
+    defender.emit('more_time')
+    expect((await extended).ms).toBeGreaterThan(REACTION_EXTRA_MS)
+    let extendedAgain = false
+    defender.once('reaction_extended', () => { extendedAgain = true })
+    defender.emit('more_time')
+
     const resolved = waitForState(actor, s => !s.reactionWindowOpen && s.board[row][0] !== null)
     defender.emit('pass_reaction')
     const { lastAction } = await resolved
     expect(lastAction.type).toBe('place')
+    expect(extendedAgain).toBe(false)
   })
 
   it('ends the game when a player forfeits', async () => {

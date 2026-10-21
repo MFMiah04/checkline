@@ -266,6 +266,10 @@ export default function Game({ solo = false }) {
     reaction_window: ({ action, actorSide, ms }) => {
       setReactionWindowMode({ action, actorSide, ms })
     },
+    reaction_extended: ({ ms }) => {
+      // "More time" was granted: restart the countdown from the new total
+      setReactionWindowMode(prev => prev ? { ...prev, ms, extended: true } : prev)
+    },
     reversal_cancelled: ({ ms }) => {
       // Timer restarted after cancelling reversal target selection — update countdown
       setReactionWindowMode(prev => prev ? { ...prev, ms } : prev)
@@ -468,15 +472,21 @@ export default function Game({ solo = false }) {
         .filter(f => !(f.from.zone === 'hand' && f.from.side === side && f.to.zone !== 'hand'))
         .filter(f => !(f.from.zone === 'board' && f.to.zone === 'board' && myTurn))
         .map(f => {
-          const from = seen.rects.get(f.id) ?? seen.zones[zoneKey(f.from)]
-          const to = rectOf(root, f.id) ?? zonesNow[zoneKey(f.to)]
+          // A Buff or Debuff flies as a card onto its piece and fades into the badge, rather than
+          // being squeezed into the badge's shape
+          const from = f.from.zone === 'status' ? cardOver(seen.zones[zoneKey(f.from)])
+            : seen.rects.get(f.id) ?? seen.zones[zoneKey(f.from)]
+          const to = f.to.zone === 'status' ? cardOver(zonesNow[zoneKey(f.to)])
+            : rectOf(root, f.id) ?? zonesNow[zoneKey(f.to)]
           if (!from || !to) return null
           const type = f.to.type ?? f.from.type
-          const look = f.from.zone === 'board'
-            ? { kind: 'piece', piece: { type: f.from.type, owner: f.from.owner } }
+          // Anything heading onto a square flies as the piece it is or will be, in its owner's colour
+          const look = f.from.zone === 'board' ? { kind: 'piece', piece: { type: f.from.type, owner: f.from.owner } }
+            : f.to.zone === 'board' ? { kind: 'piece', piece: { type: f.to.type, owner: f.to.owner } }
             : { kind: 'card', type, faceUp: !!type && f.to.zone !== 'deck' && !(f.to.zone === 'hand' && f.to.side !== side) }
+          const fade = f.to.zone === 'status' ? 'out' : f.from.zone === 'status' ? 'in' : null
           const drawnBy = f.from.zone === 'deck' && f.to.zone === 'hand' ? f.to.side : null
-          return { key: ++flightKeyRef.current, id: f.id, from, to, look, drawnBy }
+          return { key: ++flightKeyRef.current, id: f.id, from, to, look, drawnBy, fade }
         })
         .filter(Boolean)
 
@@ -1010,6 +1020,9 @@ if (!isMyTurn || !inActions || attackPending) return
               : 'You have no card that can react to this.'}
           </span>
           <span className="status-timer" role="img" aria-label="Time left to react"><span style={{ width: `${reactionPct}%` }} /></span>
+          {!reactionWindowMode.extended && (
+            <button className="status-btn btn-secondary" onClick={() => emit('more_time')} aria-label="More time: add 10 seconds, once">+10 s</button>
+          )}
           <button className="status-btn btn-secondary" onClick={() => { emit('pass_reaction'); markResponded() }}>
             {canReact ? 'Let it happen' : 'Continue'}
           </button>
@@ -1325,6 +1338,14 @@ function rectFrom(el) {
   if (!el) return null
   const r = el.getBoundingClientRect()
   return r.width > 0 ? { left: r.left, top: r.top, width: r.width, height: r.height } : null
+}
+
+// A card-shaped box centred on a square, for Buffs and Debuffs going on or off a piece
+function cardOver(square) {
+  if (!square) return null
+  const height = square.height * 0.9
+  const width = height * 0.72
+  return { left: square.left + (square.width - width) / 2, top: square.top + (square.height - height) / 2, width, height }
 }
 
 function measureZones(els) {

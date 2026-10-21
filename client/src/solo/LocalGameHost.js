@@ -3,7 +3,7 @@
 // events as the server, so the game screen works with it unchanged.
 import {
   newGame, applyPlayerAction, resolveTimeout, reorderHand, playerView, playerToAct,
-  chooseAction, chooseMulligan, REACTION_WINDOW_MS, BODYGUARD_MS, REVERSAL_CANCEL_MS,
+  chooseAction, chooseMulligan, REACTION_WINDOW_MS, REACTION_EXTRA_MS, BODYGUARD_MS, REVERSAL_CANCEL_MS,
 } from '@checkline/engine'
 
 export const HUMAN = 0
@@ -211,6 +211,7 @@ export class LocalGameHost {
     if (1 - side === HUMAN) {
       this.send('reaction_window', { action: { ...pending.action, ...pending.revealed }, actorSide: side, ms: REACTION_WINDOW_MS })
       this.commit(announced)
+      this.moreTimeUsed = false
       this.startReactionTimer(REACTION_WINDOW_MS)
     } else {
       this.commit(announced)  // the computer decides in scheduleComputer
@@ -310,6 +311,13 @@ export class LocalGameHost {
       this.cancel(this.reactionTimer)
       this.reactionTimer = null
       this.reactionFrozen = true
+    },
+    more_time() {
+      if (this.game?.pending?.kind !== 'reaction' || this.reactionFrozen || this.moreTimeUsed || !this.reactionTimer) return
+      this.moreTimeUsed = true
+      const ms = Math.max(0, (this.reactionExpiresAt ?? 0) - Date.now()) + REACTION_EXTRA_MS
+      this.startReactionTimer(ms)
+      this.send('reaction_extended', { ms })
     },
     reversal_cancel() {
       if (this.game?.pending?.kind !== 'reaction' || !this.reactionFrozen) return

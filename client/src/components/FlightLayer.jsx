@@ -20,13 +20,19 @@ export default function FlightLayer({ flights, mySide, onLanded }) {
 }
 
 function Flight({ flight, mySide, onLanded }) {
-  const { from, to, look } = flight
+  const { from, to, look, fade } = flight
+  // fade 'out': the card melts into what it lands on (a Buff into its badge); 'in': the reverse
+  const opacity = fade === 'out' ? [1, 1, 0] : fade === 'in' ? [0, 1, 1] : 1
   return (
     <motion.div
       className="flight"
-      initial={{ left: from.left, top: from.top, width: from.width, height: from.height }}
-      animate={{ left: to.left, top: to.top, width: to.width, height: to.height }}
-      transition={{ duration: FLIGHT_MS / 1000, ease: [0.3, 0, 0.2, 1] }}
+      initial={{ left: from.left, top: from.top, width: from.width, height: from.height, opacity: fade === 'in' ? 0 : 1 }}
+      animate={{ left: to.left, top: to.top, width: to.width, height: to.height, opacity }}
+      transition={{
+        duration: FLIGHT_MS / 1000,
+        ease: [0.3, 0, 0.2, 1],
+        opacity: { duration: FLIGHT_MS / 1000, times: fade === 'in' ? [0, 0.3, 1] : [0, 0.7, 1] },
+      }}
       onAnimationComplete={() => onLanded(flight.key)}
     >
       {look.kind === 'piece'

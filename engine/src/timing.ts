@@ -7,6 +7,9 @@
  */
 export const REACTION_WINDOW_MS = 4000
 
+/** The "More time" button adds this once per reaction window. */
+export const REACTION_EXTRA_MS = 10000
+
 /** Extra time to Intercept or let it happen, after backing out of choosing a Reversal target. */
 export const REVERSAL_CANCEL_MS = 4000
 
