@@ -11,6 +11,7 @@ import ReturnSlide from '../components/ReturnSlide'
 import FlightLayer, { FLIGHT_MS } from '../components/FlightLayer'
 import CardFace from '../components/CardFace'
 import CardDetails from '../components/CardDetails'
+import Icon from '../components/Icon'
 import HistoryPanel from '../components/HistoryPanel'
 import Modal from '../components/Modal'
 import RulesModal from '../components/RulesModal'
@@ -39,6 +40,8 @@ const STEP_GAP_MS = 150
 // Replay: how long the board shows the position before an action, and after it
 const REPLAY_BEFORE_MS = 600
 const REPLAY_AFTER_MS = FLIGHT_MS + 900
+// How long an Intercept or Reversal is announced over the board
+const REACTION_MOMENT_MS = 1600
 
 function emit(event, payload) {
   getSocket().emit(event, payload)
@@ -116,6 +119,8 @@ export default function Game({ solo = false }) {
   const [rulesOpen, setRulesOpen] = useState(false)
   const [gameOverSeen, setGameOverSeen] = useState(false)
   const [turnFlash, setTurnFlash] = useState(false)
+  // null | { key, kind: 'intercept' | 'reversal', text } — a reaction just fired
+  const [reactionMoment, setReactionMoment] = useState(null)
 
   // ── Refs ───────────────────────────────────────────────────────────
   const boardSpaceRefs    = useRef({})  // 'row,lane' → DOM el
@@ -262,6 +267,20 @@ export default function Game({ solo = false }) {
       setOppSelectedPiece(null)
       setOppHoveredCell(null)
       if (!s.reactionWindowOpen) { setReactionWindowMode(null); setReversalTargetMode(null); setMyPendingAction(null) }
+      // An Intercept or Reversal gets a moment of its own, so neither player misses it
+      if (lastAction?.reactionFired) {
+        const reactor = s.players[1 - lastAction.actorSide].name
+        const actor = s.players[lastAction.actorSide].name
+        const reactorName = 1 - lastAction.actorSide === side ? 'You' : reactor
+        const actorName = lastAction.actorSide === side ? 'your' : `${actor}'s`
+        const text = lastAction.reactionFired === 'intercept'
+          ? `${reactorName} cancelled ${actorName} move.`
+          : `${reactorName} redirected ${actorName} card.`
+        const moment = { key: Date.now(), kind: lastAction.reactionFired, text }
+        setReactionMoment(moment)
+        setTimeout(() => setReactionMoment(m => (m?.key === moment.key ? null : m)), REACTION_MOMENT_MS)
+        busyUntilRef.current = Math.max(busyUntilRef.current, Date.now() + REACTION_MOMENT_MS)
+      }
       if (lastAction?.reactionFired === 'intercept' && lastAction?.actorSide === side) {
         const p = lastAction.payload
         let msg = 'Your action was intercepted — you cannot repeat it this turn.'
@@ -1012,18 +1031,8 @@ if (!isMyTurn || !inActions || attackPending) return
     setDiscardMode(false)
   }
 
-  if (!isGameOver && !replay && isMyTurn && (discardMode || inDiscard)) {
-    return (
-      <div className="game">
-        <DiscardOverlay
-          hand={myHand}
-          excess={myHand.length - 5}
-          onConfirm={handleDiscardConfirm}
-          onCancel={inDiscard ? null : () => setDiscardMode(false)}
-        />
-      </div>
-    )
-  }
+  // Ending the turn with more than 5 cards: choose which to discard, in a dialog over the board
+  const discarding = !isGameOver && !replay && isMyTurn && (discardMode || inDiscard)
 
   const opponentName = opponent.name
   // Only highlight the status bar when there's a real choice to make
@@ -1177,6 +1186,25 @@ if (!isMyTurn || !inActions || attackPending) return
         </Modal>
       )}
       {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
+      {discarding && (
+        <Modal title="Discard down to 5" onClose={inDiscard ? undefined : () => setDiscardMode(false)} className="discard-dialog">
+          <DiscardOverlay
+            hand={myHand}
+            excess={myHand.length - 5}
+            onConfirm={handleDiscardConfirm}
+            onCancel={inDiscard ? null : () => setDiscardMode(false)}
+          />
+        </Modal>
+      )}
+      {reactionMoment && (
+        <div key={reactionMoment.key} className={`reaction-moment reaction-${reactionMoment.kind}`} role="status">
+          <Icon name={reactionMoment.kind === 'intercept' ? 'Intercept' : 'Reversal'} size={44} />
+          <div>
+            <strong>{reactionMoment.kind === 'intercept' ? 'Intercepted!' : 'Reversed!'}</strong>
+            <span>{reactionMoment.text}</span>
+          </div>
+        </div>
+      )}
       {isGameOver && !gameOverSeen && (
         <Modal title={iWon ? 'You win!' : 'You lose'} onClose={() => setGameOverSeen(true)} className="game-over-dialog">
           <p className="modal-body">{gameOverReason}</p>
@@ -1323,7 +1351,7 @@ if (!isMyTurn || !inActions || attackPending) return
           <div className="game-side-footer">
             {lastMove && sideTab === 'details' && <p className="last-move"><strong>Last move:</strong> {lastMove}</p>}
             {!isGameOver && isMyTurn && inActions && !promptActive && !replay && (
-              <button className="end-turn-btn" onClick={handleEndTurn}>End turn</button>
+              <button className={`end-turn-btn${state.actionsRemaining <= 0 ? ' is-ready' : ''}`} onClick={handleEndTurn}>End turn</button>
             )}
             <div className="game-side-links">
               <button className="btn-link" onClick={() => setRulesOpen(true)}>Rules</button>
@@ -1586,9 +1614,8 @@ function DiscardOverlay({ hand, excess, onConfirm, onCancel }) {
 
   return (
     <div className="discard-overlay">
-      <h2>Discard</h2>
       <p className="mulligan-hint">
-        Select {excess} card{excess > 1 ? 's' : ''} to discard (hand must end at 5).
+        Choose {excess} card{excess > 1 ? 's' : ''} to discard. Your hand must end the turn at 5.
       </p>
       <Hand cards={hand} selectedSet={new Set(selected)} onCardClick={toggle} />
       <div className="discard-controls">

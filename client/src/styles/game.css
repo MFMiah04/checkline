@@ -71,6 +71,13 @@
   height: 12px;
   border-radius: 50%;
   display: inline-block;
+  /* Spending, gaining or losing an action visibly changes the dot */
+  transition: background-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.dot-empty,
+.dot-disrupted {
+  transform: scale(0.8);
 }
 
 .dot-filled    { background: var(--brass); }
@@ -1090,6 +1097,82 @@ button.card.selected:active:not(:disabled) {
   font-size: 1.1rem;
 }
 
+/* No actions left: nudge the player towards ending the turn */
+.end-turn-btn.is-ready {
+  animation: end-turn-ready 1.6s ease-in-out infinite;
+}
+
+@keyframes end-turn-ready {
+  0%, 100% { box-shadow: inset 0 -3px 0 var(--brass-pressed), 0 0 0 0 rgba(227, 198, 111, 0); }
+  50%      { box-shadow: inset 0 -3px 0 var(--brass-pressed), 0 0 0 6px rgba(227, 198, 111, 0.8); }
+}
+
+/* An Intercept or Reversal, stamped over the middle of the screen for a moment */
+.reaction-moment {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 24px 16px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--ivory);
+  box-shadow: 0 18px 40px rgba(43, 32, 22, 0.4), inset 0 0 0 3px var(--type-reaction);
+  color: var(--type-reaction);
+  pointer-events: none;
+  animation: reaction-stamp 1.6s ease-out forwards;
+}
+
+.reaction-moment div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reaction-moment strong {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.reaction-moment span {
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+@keyframes reaction-stamp {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(1.6) rotate(-6deg); }
+  14%  { opacity: 1; transform: translate(-50%, -50%) scale(0.96) rotate(-2deg); }
+  22%  { transform: translate(-50%, -50%) scale(1) rotate(-2deg); }
+  82%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-2deg); }
+  100% { opacity: 0; transform: translate(-50%, -54%) scale(1) rotate(-2deg); }
+}
+
+/* The end-of-turn discard, as a dialog over the board */
+.discard-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-width: none;
+}
+
+.discard-dialog .discard-overlay {
+  padding: 0;
+  margin: 0;
+  max-width: none;
+}
+
+.discard-dialog .hand {
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 8px 0 18px;
+}
+
+.discard-dialog .hand .card {
+  --card-w: 80px;
+  --card-h: 112px;
+}
+
 .game-side-links {
   display: flex;
   justify-content: space-between;
@@ -1294,6 +1377,7 @@ button.card.selected:active:not(:disabled) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .end-turn-btn.is-ready,
   .turn-badge:not(.turn-badge-theirs),
   .my-turn-start .turn-badge,
   .my-turn-start .game-board-col .table-frame,
