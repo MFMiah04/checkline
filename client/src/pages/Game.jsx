@@ -16,6 +16,8 @@ import RulesModal from '../components/RulesModal'
 import { isValidMove, isValidAttack, isPinned, isFatigued } from '@checkline/engine'
 import { getAttackRange } from '../utils/attackRange'
 import { locateCards, planFlights } from '../utils/cardLocations'
+import { describeAction } from '../utils/describeAction'
+import { squareName } from '../utils/describe'
 import '../styles/game.css'
 
 const PLACEABLE   = new Set(['Pawn', 'Knight', 'Bishop', 'Rook', 'Queen'])
@@ -173,7 +175,7 @@ export default function Game({ solo = false }) {
     opponent_hover_deck:    ({ hovering }) => setOppDeckHovered(hovering),
     state_update: ({ state: s, lastAction }) => {
       setState(s)
-      if (lastAction) setLastMove(describeLastAction(lastAction, side, s.players))
+      if (lastAction) setLastMove(describeAction(lastAction, { before: state?.board, after: s.board, mySide: side, names: s.players.map(p => p.name) }))
 
       // Flash turn indicator when turn changes
       if (prevTurnRef.current !== null && prevTurnRef.current !== s.currentTurn) {
@@ -961,7 +963,7 @@ if (!isMyTurn || !inActions || attackPending) return
       return (
         <>
           <span className="status-text">
-            <strong>{opponentName} is {richActionLabel(reactionWindowMode.action)}.</strong>{' '}
+            <strong>{opponentName} is {richActionLabel(reactionWindowMode.action, state.board, side)}.</strong>{' '}
             {canReact
               ? 'React with a glowing card, or let it happen.'
               : 'You have no card that can react to this.'}
@@ -1245,49 +1247,27 @@ if (!isMyTurn || !inActions || attackPending) return
   )
 }
 
-// A one-line summary of what just happened, for the "Last move" line
-function describeLastAction(la, mySide, players) {
-  const who = la.actorSide === mySide ? 'You' : (players[la.actorSide]?.name ?? 'Opponent')
-  const p = la.payload ?? {}
-  let text
-  switch (la.type) {
-    case 'place':             text = `${who} placed a ${p.pieceType ?? 'piece'}`; break
-    case 'direct_move':       text = `${who} moved a piece`; break
-    case 'direct_attack':     text = la.secondaryEffect === 'shield_absorbed' ? `${who} attacked, but a Shield blocked it` : `${who} captured a piece`; break
-    case 'direct_sacrifice':  text = `${who} sacrificed a ${p.pieceType ?? 'piece'}`; break
-    case 'cycle':             text = `${who} cycled a card`; break
-    case 'shuffle_into_deck': text = `${who} shuffled a card into the deck`; break
-    case 'end_turn':          text = `${who} ended the turn`; break
-    case 'play_buff':         text = `${who} played ${p.buffType ?? 'a Buff'}`; break
-    case 'play_debuff':       text = `${who} played ${p.debuffType ?? 'a Debuff'}`; break
-    case 'bodyguard_save':    text = 'A Bodyguard was sacrificed to stop an attack'; break
-    default:
-      text = la.type.startsWith('play_')
-        ? `${who} played ${la.type[5].toUpperCase()}${la.type.slice(6)}`
-        : `${who} acted`
-  }
-  if (la.reactionFired === 'intercept') text += ', but it was Intercepted'
-  if (la.reactionFired === 'reversal') text += ', redirected by Reversal'
-  return `${text}.`
-}
-
-function richActionLabel(action) {
+// What the opponent is doing while you may react, e.g. "attacking your Knight on b2 with their Rook on b4"
+function richActionLabel(action, board, mySide) {
   if (!action) return 'acting'
-  const { type, pieceType, targetType, effectType } = action
+  const { type, pieceType, effectType } = action
+  const at = (row, lane) => (row != null ? board?.[row]?.[lane] : null)
+  const on = (row, lane) => (row != null ? ` on ${squareName(row, lane)}` : '')
+  const named = (piece, fallback = 'piece') => `${piece ? (piece.owner === mySide ? 'your' : 'their') : 'a'} ${piece?.type ?? fallback}`
   switch (type) {
-    case 'place':            return `placing a ${pieceType ?? 'piece'}`
-    case 'direct_move':      return `moving their ${pieceType ?? 'piece'}`
-    case 'direct_attack':    return `attacking${targetType ? ` your ${targetType}` : ''}${pieceType ? ` with their ${pieceType}` : ''}`
-    case 'direct_sacrifice': return `sacrificing their ${pieceType ?? 'piece'}`
-    case 'play_buff':        return effectType && targetType ? `applying ${effectType} to their ${targetType}` : 'playing a buff'
-    case 'play_debuff':      return effectType && targetType ? `applying ${effectType} to your ${targetType}` : 'playing a debuff'
-    case 'play_reposition':  return `repositioning their ${pieceType ?? 'piece'}`
-    case 'play_swap':        return 'swapping two pieces'
-    case 'play_dispel':      return `dispelling from a ${targetType ?? 'piece'}`
-    case 'play_return':      return `returning their ${pieceType ?? 'piece'} to hand`
-    case 'play_purge':       return 'playing Purge'
-    case 'play_command':     return 'playing Command'
-    case 'play_disrupt':     return 'playing Disrupt'
+    case 'place':            return `placing a ${pieceType ?? 'piece'}${on(action.row, action.lane)}`
+    case 'direct_move':      return `moving their ${pieceType ?? 'piece'} ${squareName(action.row, action.lane)} → ${squareName(action.toRow, action.toLane)}`
+    case 'direct_attack':    return `attacking ${named(at(action.targetRow, action.targetLane))}${on(action.targetRow, action.targetLane)} with their ${pieceType ?? 'piece'}${on(action.row, action.lane)}`
+    case 'direct_sacrifice': return `sacrificing their ${pieceType ?? 'piece'}${on(action.row, action.lane)}`
+    case 'play_buff':
+    case 'play_debuff':      return `putting ${effectType ?? (type === 'play_buff' ? 'a Buff' : 'a Debuff')} on ${named(at(action.targetRow, action.targetLane))}${on(action.targetRow, action.targetLane)}`
+    case 'play_reposition':  return `repositioning their ${pieceType ?? 'piece'} ${squareName(action.pieceRow, action.pieceLane)} → ${squareName(action.toRow, action.toLane)}`
+    case 'play_swap':        return `swapping ${named(at(action.aRow, action.aLane))}${on(action.aRow, action.aLane)} with ${named(at(action.bRow, action.bLane))}${on(action.bRow, action.bLane)}`
+    case 'play_dispel':      return `dispelling ${named(at(action.targetRow, action.targetLane))}${on(action.targetRow, action.targetLane)}`
+    case 'play_return':      return `returning their ${pieceType ?? 'piece'}${on(action.pieceRow, action.pieceLane)} to hand`
+    case 'play_purge':       return 'playing Purge, clearing every Buff and Debuff'
+    case 'play_command':     return 'playing Command for an extra action'
+    case 'play_disrupt':     return 'playing Disrupt, so you lose an action next turn'
     default:                 return type
   }
 }
