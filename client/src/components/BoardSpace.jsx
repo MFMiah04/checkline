@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
+import { isPlaceable } from '@checkline/engine'
 import CardFace from './CardFace'
 import PieceToken from './PieceToken'
 import { describePiece, squareName } from '../utils/describe'
@@ -88,9 +89,16 @@ export default function BoardSpace({
           const isHandCard = 'id' in floatingCard
           return (
             <motion.div key="floating-piece" {...sharedMotionProps} className="floating-wrapper" aria-hidden="true">
-              {isHandCard
-                ? <div className="card card-mini" data-fly={floatingCard.id ?? undefined}><CardFace type={floatingCard.type} compact /></div>
-                : <PieceToken piece={floatingCard} mySide={side} className="floating-piece-highlight" />}
+              {/* Held over the board, a piece card already shows as the piece it will become,
+                  in its owner's colour; other cards stay cards */}
+              {isHandCard && !isPlaceable(floatingCard.type)
+                ? <div className="card card-mini held" data-fly={floatingCard.id ?? undefined}><CardFace type={floatingCard.type} compact /></div>
+                : <PieceToken
+                    piece={isHandCard ? { type: floatingCard.type, owner: floatingCard.owner } : floatingCard}
+                    mySide={side}
+                    className="held"
+                    flyId={isHandCard ? floatingCard.id : flyId(floatingCard)}
+                  />}
               {errorTip && <div className="floating-error-tip">{errorTip}</div>}
             </motion.div>
           )

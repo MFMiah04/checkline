@@ -26,7 +26,9 @@ export default function Board({
   const ownOriginKey   = floatingPiece    ? `${floatingPiece.fromRow},${floatingPiece.fromLane}` : null
   const ownTargetKey   = boardHoveredCell ? `${boardHoveredCell.row},${boardHoveredCell.lane}`    : null
   const oppOriginKey   = oppSelectedPiece ? `${oppSelectedPiece.row},${oppSelectedPiece.lane}`    : null
-  const oppTargetKey   = oppHoveredCell   ? `${oppHoveredCell.row},${oppHoveredCell.lane}`        : null
+  // A piece the opponent has picked up hovers over its own square until they point somewhere
+  const oppTargetKey   = oppHoveredCell   ? `${oppHoveredCell.row},${oppHoveredCell.lane}`
+                       : oppSelectedPiece ? oppOriginKey : null
   const confirmKey     = confirmTarget    ? `${confirmTarget.row},${confirmTarget.lane}`           : null
 
   // The piece shown floating (own: from floatingPiece state; opp: from board or card selection)

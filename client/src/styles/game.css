@@ -384,6 +384,18 @@
   background: #EBC3B9;
 }
 
+/* A card or piece being held over the board: bigger, with a deeper shadow, and tilted back
+   (bottom edge nearer, top edge further away) and lifted, so whatever is underneath shows */
+.floating-wrapper > .held {
+  transform: perspective(420px) rotateX(26deg) translateY(-30%) scale(1.14);
+  transform-origin: 50% 100%;
+  box-shadow: 0 22px 26px rgba(30, 40, 30, 0.5), inset 0 0 0 1px var(--brass);
+}
+
+.floating-wrapper > .card.held {
+  box-shadow: 0 22px 26px rgba(30, 40, 30, 0.5), inset 0 0 0 3px var(--ivory), inset 0 0 0 4px var(--brass);
+}
+
 .floating-piece-highlight {
   box-shadow: 0 8px 18px rgba(30, 40, 30, 0.45), 0 0 0 3px var(--brass-light);
 }
@@ -958,6 +970,8 @@ button.card.selected:active:not(:disabled) {
 
 .mulligan,
 .discard-overlay {
+  align-self: center;
+  margin: auto 0;
   display: flex;
   flex-direction: column;
   align-items: center;

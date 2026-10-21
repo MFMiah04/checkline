@@ -427,6 +427,11 @@ export default function Game({ solo = false }) {
     const ids = Array.isArray(hand) ? hand.map(c => c.id) : (hand.ids ?? [])
     return ids.includes(announced.cardId) ? announced.cardId : null
   }, [state, announced])
+  // An attack by the opponent that you may still react to: the attacker hovers over its target
+  const oppAttack = announced && announced.actorSide !== side && announced.action.type === 'direct_attack'
+    ? announced.action
+    : null
+
   const stagedCard = announcedCardId != null && STAGED_CARD[announced.action.type]
     ? { id: announcedCardId, type: STAGED_CARD[announced.action.type], actorSide: announced.actorSide }
     : null
@@ -474,6 +479,19 @@ export default function Game({ solo = false }) {
           return { key: ++flightKeyRef.current, id: f.id, from, to, look, drawnBy }
         })
         .filter(Boolean)
+
+      // An opponent's piece can move on screen without changing square, like an attacker
+      // going home after hovering over its target: fly it back too
+      if (!skipFlightsRef.current) {
+        const flying = new Set(made.map(f => f.id))
+        for (const [id, loc] of shownCards) {
+          if (loc.zone !== 'board' || loc.owner === side || flying.has(id)) continue
+          const was = seen.rects.get(id)
+          const now = rectOf(root, id)
+          if (!was || !now || Math.hypot(was.left - now.left, was.top - now.top) < 12) continue
+          made.push({ key: ++flightKeyRef.current, id, from: was, to: now, look: { kind: 'piece', piece: { type: loc.type, owner: loc.owner } } })
+        }
+      }
       skipFlightsRef.current = false
       seen.cards = shownCards
       if (made.length > 0) {
@@ -569,7 +587,7 @@ export default function Game({ solo = false }) {
     : null
 
   // Which hand cards glow as usable reactions during the reaction window
-  const reactionIndices = reactionWindowMode ? (() => {
+  const reactionIndices = reactionWindowMode && !reactionWindowMode.responded ? (() => {
     const isBuffDebuff = reactionWindowMode.action.type === 'play_buff' || reactionWindowMode.action.type === 'play_debuff'
     const s = new Set()
     myHand.forEach((c, i) => {
@@ -580,14 +598,20 @@ export default function Game({ solo = false }) {
 
   // ── Action handlers ────────────────────────────────────────────────
 
+  // After answering a reaction window, keep it (and the preview of the action on the board)
+  // until the game resolves it, so nothing jumps back and forth in between
+  function markResponded() {
+    setReactionWindowMode(m => (m ? { ...m, responded: true } : m))
+  }
+
   function handleReactionCardClick(i) {
-    if (!reactionWindowMode) return
+    if (!reactionWindowMode || reactionWindowMode.responded) return
     const card = myHand[i]
     if (!card) return
     const isBuffDebuff = reactionWindowMode.action.type === 'play_buff' || reactionWindowMode.action.type === 'play_debuff'
     if (card.type === 'Intercept') {
       emit('play_reaction', { cardIndex: i })
-      setReactionWindowMode(null)
+      markResponded()
     } else if (card.type === 'Reversal' && isBuffDebuff && !reversalTargetMode) {
       setReversalTargetMode({ cardIdx: i })
       emit('reversal_placing') // freeze timer while picking a target
@@ -671,7 +695,7 @@ if (!isMyTurn || !inActions || attackPending) return
       }
       emit('play_reaction', { cardIndex: cardIdx, targetRow: row, targetLane: lane })
       setReversalTargetMode(null)
-      setReactionWindowMode(null)
+      markResponded()
       return
     }
 
@@ -944,7 +968,7 @@ if (!isMyTurn || !inActions || attackPending) return
 
   const opponentName = opponent.name
   // Only highlight the status bar when there's a real choice to make
-  const promptActive = !!((reactionWindowMode && reactionIndices.size > 0) || bodyguardMode || enslaveMode)
+  const promptActive = !!((reactionIndices?.size > 0) || bodyguardMode || enslaveMode)
   const detailsPiece = inspected?.piece ?? (!inspected && selectedPiece ? state.board[selectedPiece.row]?.[selectedPiece.lane] : null)
   const detailsType = inspected?.type ?? (!inspected?.piece && liftedCard ? liftedCard.card.type : null)
 
@@ -971,6 +995,9 @@ if (!isMyTurn || !inActions || attackPending) return
         </>
       )
     }
+    if (reactionWindowMode?.responded) {
+      return <span className="status-text"><strong>{opponentName} is {richActionLabel(reactionWindowMode.action, state.board, side)}.</strong></span>
+    }
     if (reactionWindowMode) {
       // Say plainly when there's nothing in your hand that can answer this action
       const canReact = reactionIndices.size > 0
@@ -983,7 +1010,7 @@ if (!isMyTurn || !inActions || attackPending) return
               : 'You have no card that can react to this.'}
           </span>
           <span className="status-timer" role="img" aria-label="Time left to react"><span style={{ width: `${reactionPct}%` }} /></span>
-          <button className="status-btn btn-secondary" onClick={() => { emit('pass_reaction'); setReactionWindowMode(null) }}>
+          <button className="status-btn btn-secondary" onClick={() => { emit('pass_reaction'); markResponded() }}>
             {canReact ? 'Let it happen' : 'Continue'}
           </button>
         </>
@@ -1153,7 +1180,8 @@ if (!isMyTurn || !inActions || attackPending) return
                 validAttacks={validAttacks}
                 attackRange={attackRange}
                 cardTargets={enslaveTargets ?? bodyguardTargets ?? reversalTargets ?? cardTargets}
-                underAttack={bodyguardMode ? `${bodyguardMode.targetRow},${bodyguardMode.targetLane}` : null}
+                underAttack={bodyguardMode ? `${bodyguardMode.targetRow},${bodyguardMode.targetLane}`
+                  : oppAttack ? `${oppAttack.targetRow},${oppAttack.targetLane}` : null}
                 inCheck={state.inCheck}
                 onSpaceClick={!isGameOver && (enslaveMode || bodyguardMode || reversalTargetMode || (isMyTurn && inActions)) ? handleSpaceClick : undefined}
                 onInspect={piece => setInspected({ piece })}
@@ -1163,8 +1191,9 @@ if (!isMyTurn || !inActions || attackPending) return
                 floatingPiece={floatingPiece}
                 boardHoveredCell={boardHoveredCell}
                 handFloatingCard={handFloatingCard}
-                oppSelectedPiece={oppSelectedPiece}
-                oppHoveredCell={(oppDiscardHovered || oppDeckHovered) ? null : oppHoveredCell}
+                oppSelectedPiece={oppAttack ? { row: oppAttack.row, lane: oppAttack.lane } : oppSelectedPiece}
+                oppHoveredCell={oppAttack ? { row: oppAttack.targetRow, lane: oppAttack.targetLane }
+                  : (oppDiscardHovered || oppDeckHovered) ? null : oppHoveredCell}
                 oppSelectedCardType={oppSelectedCardType}
                 oppLiftedCardId={oppLiftedCardId}
                 confirmTarget={confirmTarget}
@@ -1331,8 +1360,7 @@ function computePreviewBoard(board, action, actorSide, cardId = null) {
       break
     }
     case 'direct_attack':
-      if (action.targetRow != null) b[action.targetRow][action.targetLane] = null
-      break
+      break  // the target stays in view, with the attacker hovering over it, until the attack resolves
     case 'direct_sacrifice':
       if (action.row != null) b[action.row][action.lane] = null
       break
