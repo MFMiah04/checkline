@@ -842,11 +842,144 @@ button.card.selected:active:not(:disabled) {
   overflow: hidden;
 }
 
-/* The details scroll on their own so the End turn button never moves */
-.card-details {
+/* Details | History tabs at the top of the side panel */
+.side-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--ivory-shade);
+  flex-shrink: 0;
+}
+
+.side-tab {
+  flex: 1;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+}
+
+.side-tab:hover:not(:disabled) {
+  background: var(--panel);
+}
+
+.side-tab:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
+.side-tab.is-selected,
+.side-tab.is-selected:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--ivory);
+  box-shadow: 0 1px 3px rgba(74, 51, 36, 0.2);
+}
+
+.side-tab-panel {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* Move history */
+.history-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.history,
+.history-entries {
+  list-style: none;
+}
+
+.history-turn + .history-turn {
+  margin-top: 14px;
+}
+
+.history-turn-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.history-turn-name {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.history-turn-name.is-mine {
+  color: var(--ink);
+}
+
+.history-replay-turn {
+  font-size: 0.78rem;
+}
+
+.history-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.history-entry:nth-child(odd) {
+  background: var(--ivory-shade);
+}
+
+.history-entry.is-replaying {
+  background: #F6E8BE;
+  box-shadow: inset 3px 0 0 var(--brass);
+}
+
+.history-text {
+  flex: 1;
+}
+
+.history-replay {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.65rem;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: none;
+}
+
+.history-replay:hover:not(:disabled) {
+  background: var(--brass-light);
+}
+
+/* While a replay plays, the board is dimmed slightly and marked as not live */
+.replaying .game-board-col .table-frame {
+  box-shadow: 0 0 0 3px var(--brass-light), 0 10px 24px rgba(74, 51, 36, 0.3), inset 0 0 0 2px var(--oak-edge);
+}
+
+.replaying .game-hand,
+.replaying .game-piles {
+  opacity: 0.7;
+}
+
+/* The details scroll on their own so the End turn button never moves */
+.card-details {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1088,7 +1221,13 @@ button.card.selected:active:not(:disabled) {
   }
 
   .hand > div + div {
-    margin-left: -6px;
+    margin-left: -12px;
+  }
+
+  /* A full hand can be wider than a phone: never let it widen the page */
+  .game-hand {
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   .hand .card {
@@ -1139,7 +1278,7 @@ button.card.selected:active:not(:disabled) {
     overflow: visible;
   }
 
-  .card-details {
+  .side-tab-panel {
     overflow: visible;
   }
 

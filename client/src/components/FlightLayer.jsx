@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import CardFace from './CardFace'
 import PieceToken from './PieceToken'
@@ -21,6 +22,13 @@ export default function FlightLayer({ flights, mySide, onLanded }) {
 
 function Flight({ flight, mySide, onLanded }) {
   const { from, to, look, fade } = flight
+  // Browsers pause animations in background tabs; never leave a card stuck in the air
+  const onLandedRef = useRef(onLanded)
+  useLayoutEffect(() => { onLandedRef.current = onLanded })
+  useEffect(() => {
+    const id = setTimeout(() => onLandedRef.current(flight.key), FLIGHT_MS + 1000)
+    return () => clearTimeout(id)
+  }, [flight.key])
   // fade 'out': the card melts into what it lands on (a Buff into its badge); 'in': the reverse
   const opacity = fade === 'out' ? [1, 1, 0] : fade === 'in' ? [0, 1, 1] : 1
   return (

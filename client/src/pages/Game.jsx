@@ -11,6 +11,7 @@ import ReturnSlide from '../components/ReturnSlide'
 import FlightLayer, { FLIGHT_MS } from '../components/FlightLayer'
 import CardFace from '../components/CardFace'
 import CardDetails from '../components/CardDetails'
+import HistoryPanel from '../components/HistoryPanel'
 import Modal from '../components/Modal'
 import RulesModal from '../components/RulesModal'
 import { isValidMove, isValidAttack, isPinned, isFatigued } from '@checkline/engine'
@@ -35,6 +36,9 @@ const STAGED_CARD = {
 const QUEUED_EVENTS = ['game_starting', 'state_update', 'reaction_window', 'reversal_cancelled', 'bodyguard_prompt', 'enslave_prompt']
 // Pause between queued changes, so two in a row read as two
 const STEP_GAP_MS = 150
+// Replay: how long the board shows the position before an action, and after it
+const REPLAY_BEFORE_MS = 600
+const REPLAY_AFTER_MS = FLIGHT_MS + 900
 
 function emit(event, payload) {
   getSocket().emit(event, payload)
@@ -44,7 +48,15 @@ function emit(event, payload) {
 export default function Game({ solo = false }) {
   const { code } = useParams()
   const navigate = useNavigate()
-  const [state, setState]             = useState(null)
+  const [liveState, setState]         = useState(null)
+  // Every action so far: { key, turn, turnSide, text, before, after } with the game as this
+  // player saw it either side of the action, so hidden cards stay hidden in replays too
+  const [history, setHistory]         = useState([])
+  // null | { steps, index, showing: 'before' | 'after' } — a replay in progress
+  const [replay, setReplay]           = useState(null)
+  const [sideTab, setSideTab]         = useState('details')
+  // During a replay the board shows the replayed position instead of the live game
+  const state = replay ? replay.steps[replay.index][replay.showing] : liveState
   const [liftedCard, setLiftedCard]   = useState(null)
   // null | { card: {id, type, ...}, serverIdx: number } — card lifted from hand
   const [selectedPiece, setPiece]     = useState(null)
@@ -124,6 +136,9 @@ export default function Game({ solo = false }) {
   const busyUntilRef      = useRef(0)      // when the current flights land
   const skipFlightsRef    = useRef(false)  // jump straight to the latest state, without flights
   const flightKeyRef      = useRef(0)
+  const liveStateRef      = useRef(null)   // the live game, even while a replay is showing
+  const turnCountRef      = useRef(1)
+  const historyKeyRef     = useRef(0)
 
   const side = solo ? 0 : parseInt(localStorage.getItem('checkline_side') ?? '0')
 
@@ -158,7 +173,11 @@ export default function Game({ solo = false }) {
   }, [reactionWindowMode])
 
   const events = useEventQueue({
-    game_starting:         ({ state }) => { setState(state); clearAll(); setLastMove(''); setGameOverSeen(false) },
+    game_starting:         ({ state }) => {
+      liveStateRef.current = state
+      setState(state); clearAll(); setLastMove(''); setGameOverSeen(false)
+      setHistory([]); setReplay(null); turnCountRef.current = 1
+    },
     opponent_hand_order:   ({ ids }) => setOppHandIds(ids),
     discard_view:          ({ index, browserId }) => { setDiscardViewIndex(index); setDiscardBrowserId(browserId) },
     opponent_select_piece: payload => {
@@ -173,8 +192,18 @@ export default function Game({ solo = false }) {
     },
     opponent_hover_discard: ({ hovering }) => setOppDiscardHovered(hovering),
     state_update: ({ state: s, lastAction }) => {
+      const before = liveStateRef.current
+      liveStateRef.current = s
       setState(s)
-      if (lastAction) setLastMove(describeAction(lastAction, { before: state?.board, after: s.board, mySide: side, names: s.players.map(p => p.name) }))
+      if (lastAction) {
+        const text = describeAction(lastAction, { before: before?.board, after: s.board, mySide: side, names: s.players.map(p => p.name) })
+        setLastMove(text)
+        if (before) {
+          const entry = { key: ++historyKeyRef.current, turn: turnCountRef.current, turnSide: before.currentTurn, text, before, after: s }
+          setHistory(h => [...h, entry])
+        }
+      }
+      if (before && before.currentTurn !== s.currentTurn) turnCountRef.current++
 
       // Flash turn indicator when turn changes
       if (prevTurnRef.current !== null && prevTurnRef.current !== s.currentTurn) {
@@ -275,8 +304,42 @@ export default function Game({ solo = false }) {
       setMyPendingAction(null)
       setTimeout(() => setErrorMsg(''), 3000)
     },
-  }, QUEUED_EVENTS, busyUntilRef)
+  }, QUEUED_EVENTS, busyUntilRef, () => {
+    // The live game moved on: stop any replay so nothing is missed
+    if (replay) stopReplay()
+  })
   useSocket(events.handlers)
+
+  // ── Replay ─────────────────────────────────────────────────────────
+  // Shows each step's position before the action, then after it, so the action's cards fly
+  // just as they did live. Only on this screen: the other player is never kept waiting.
+  function startReplay(steps) {
+    clearAll()
+    setInspected(null)
+    skipFlightsRef.current = true  // jump back to the first position without animating
+    setReplay({ steps, index: 0, showing: 'before' })
+  }
+
+  function stopReplay() {
+    skipFlightsRef.current = true  // jump straight back to the live game
+    busyUntilRef.current = Date.now() + 120
+    setReplay(null)
+  }
+
+  useEffect(() => {
+    if (!replay) return
+    const id = setTimeout(() => {
+      if (replay.showing === 'before') {
+        setReplay(r => r && { ...r, showing: 'after' })
+      } else if (replay.index + 1 < replay.steps.length) {
+        setReplay(r => r && { ...r, index: r.index + 1, showing: 'before' })
+      } else {
+        skipFlightsRef.current = true
+        setReplay(null)
+      }
+    }, replay.showing === 'before' ? REPLAY_BEFORE_MS : REPLAY_AFTER_MS)
+    return () => clearTimeout(id)
+  }, [replay])
 
   function clearAll() {
     setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null); setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
@@ -400,7 +463,7 @@ export default function Game({ solo = false }) {
 
   // The action waiting for a reaction, as this player knows it: { action, actorSide, cardId }
   const announced = useMemo(() => {
-    if (!state) return null
+    if (!state || replay) return null
     // Active player: show their own pending action immediately after emitting (before server confirms)
     if (myPendingAction && state.currentTurn === side) {
       const hand = state.players[side].hand
@@ -411,7 +474,7 @@ export default function Game({ solo = false }) {
       return { action: reactionWindowMode.action, actorSide: reactionWindowMode.actorSide ?? (1 - side), cardId: reactionWindowMode.action.cardId ?? null }
     }
     return null
-  }, [reactionWindowMode, myPendingAction, state, side])
+  }, [reactionWindowMode, myPendingAction, state, side, replay])
 
   const previewBoard = useMemo(() => {
     if (!state || !announced) return null
@@ -949,7 +1012,7 @@ if (!isMyTurn || !inActions || attackPending) return
     setDiscardMode(false)
   }
 
-  if (!isGameOver && isMyTurn && (discardMode || inDiscard)) {
+  if (!isGameOver && !replay && isMyTurn && (discardMode || inDiscard)) {
     return (
       <div className="game">
         <DiscardOverlay
@@ -972,8 +1035,28 @@ if (!isMyTurn || !inActions || attackPending) return
     ? `${state.players[1 - state.winner].name} forfeited.`
     : iWon ? `${opponentName}'s King was still in check at the end of their turn.` : 'Your King was still in check at the end of your turn.'
 
+  // Replays are offered whenever no decision is waiting on this player
+  const canReplay = !reactionWindowMode && !bodyguardMode && !enslaveMode && !reversalTargetMode
+  const names = state.players.map(p => p.name)
+  // The opponent's most recent turn, for the quick "Replay their turn" link
+  const lastOppTurn = (() => {
+    const last = history.findLast(e => e.turnSide !== side)
+    return last ? history.filter(e => e.turn === last.turn) : null
+  })()
+
   // What the status bar under the board says and offers, depending on the situation
   function renderStatus() {
+    if (replay) {
+      const step = replay.steps[replay.index]
+      return (
+        <>
+          <span className="status-text">
+            <strong>Replay{replay.steps.length > 1 ? ` ${replay.index + 1}/${replay.steps.length}` : ''}:</strong> {step.text}
+          </span>
+          <button className="status-btn btn-secondary" onClick={stopReplay}>Back to game</button>
+        </>
+      )
+    }
     if (isGameOver) {
       return (
         <>
@@ -1072,11 +1155,18 @@ if (!isMyTurn || !inActions || attackPending) return
     if (state.inCheck?.[side]) {
       return <span className="status-text"><strong>Check:</strong> move your King, block, or take the attacker before your turn ends.</span>
     }
-    return <span className="status-text">Your turn: choose a card or one of your pieces.</span>
+    return (
+      <>
+        <span className="status-text">Your turn: choose a card or one of your pieces.</span>
+        {lastOppTurn && canReplay && (
+          <button className="status-btn btn-link" onClick={() => startReplay(lastOppTurn)}>Replay their turn</button>
+        )}
+      </>
+    )
   }
 
   return (
-    <div className={`game${turnFlash && isMyTurn ? ' my-turn-start' : ''}`} ref={gameRef} onPointerDownCapture={skipAhead}>
+    <div className={`game${turnFlash && isMyTurn && !replay ? ' my-turn-start' : ''}${replay ? ' replaying' : ''}`} ref={gameRef} onPointerDownCapture={skipAhead}>
       {forfeitConfirm && (
         <Modal title="Forfeit the game?" onClose={() => setForfeitConfirm(false)}>
           <p className="modal-body">{opponentName} will win this game.</p>
@@ -1123,7 +1213,7 @@ if (!isMyTurn || !inActions || attackPending) return
       )}
 
       <div className="game-main">
-        <div className="game-piles">
+        <div className="game-piles" inert={replay ? true : undefined}>
           <DeckPile
             deckSize={state.deckSize ?? 0}
             pileRef={deckPileRef}
@@ -1161,7 +1251,7 @@ if (!isMyTurn || !inActions || attackPending) return
         </div>
 
         <div className="game-board-col">
-          <div className="table-frame">
+          <div className="table-frame" inert={replay ? true : undefined}>
             <div className="table-felt">
               <Board
                 board={previewBoard ?? state.board}
@@ -1184,10 +1274,10 @@ if (!isMyTurn || !inActions || attackPending) return
                 floatingPiece={floatingPiece}
                 boardHoveredCell={boardHoveredCell}
                 handFloatingCard={handFloatingCard}
-                oppSelectedPiece={oppAttack ? { row: oppAttack.row, lane: oppAttack.lane } : oppSelectedPiece}
-                oppHoveredCell={oppAttack ? { row: oppAttack.targetRow, lane: oppAttack.targetLane }
+                oppSelectedPiece={replay ? null : oppAttack ? { row: oppAttack.row, lane: oppAttack.lane } : oppSelectedPiece}
+                oppHoveredCell={replay ? null : oppAttack ? { row: oppAttack.targetRow, lane: oppAttack.targetLane }
                   : oppDiscardHovered ? null : oppHoveredCell}
-                oppSelectedCardType={oppSelectedCardType}
+                oppSelectedCardType={replay ? null : oppSelectedCardType}
                 oppLiftedCardId={oppLiftedCardId}
                 confirmTarget={confirmTarget}
                 isShaking={isShaking}
@@ -1201,11 +1291,38 @@ if (!isMyTurn || !inActions || attackPending) return
           {errorMsg && <p className="visually-hidden" role="alert">{errorMsg}</p>}
         </div>
 
-        <aside className="game-side" aria-label="Card details">
-          <CardDetails type={detailsType} piece={detailsPiece} />
+        <aside className="game-side" aria-label="Game panel">
+          <div className="side-tabs" role="tablist" aria-label="Panel">
+            {[['details', 'Details'], ['history', 'History']].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`side-tab-${id}`}
+                aria-selected={sideTab === id}
+                aria-controls="side-tab-panel"
+                className={`side-tab${sideTab === id ? ' is-selected' : ''}`}
+                onClick={() => setSideTab(id)}
+              >
+                {label}{id === 'history' && history.length > 0 ? ` (${history.length})` : ''}
+              </button>
+            ))}
+          </div>
+          <div className="side-tab-panel" id="side-tab-panel" role="tabpanel" aria-labelledby={`side-tab-${sideTab}`}>
+            {sideTab === 'details'
+              ? <CardDetails type={detailsType} piece={detailsPiece} />
+              : <HistoryPanel
+                  history={history}
+                  names={names}
+                  mySide={side}
+                  canReplay={canReplay && !replay}
+                  replayingKey={replay ? replay.steps[replay.index].key : null}
+                  onReplay={startReplay}
+                />}
+          </div>
           <div className="game-side-footer">
-            {lastMove && <p className="last-move"><strong>Last move:</strong> {lastMove}</p>}
-            {!isGameOver && isMyTurn && inActions && !promptActive && (
+            {lastMove && sideTab === 'details' && <p className="last-move"><strong>Last move:</strong> {lastMove}</p>}
+            {!isGameOver && isMyTurn && inActions && !promptActive && !replay && (
               <button className="end-turn-btn" onClick={handleEndTurn}>End turn</button>
             )}
             <div className="game-side-links">
@@ -1219,6 +1336,7 @@ if (!isMyTurn || !inActions || attackPending) return
       <div
         className="game-hand"
         ref={ownHandAreaRef}
+        inert={replay ? true : undefined}
         onMouseEnter={(e) => {
           if (liftedCard && isMyTurn && inActions) {
             emit('hover_space', { row: null, lane: null })
