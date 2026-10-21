@@ -14,6 +14,14 @@ body {
   justify-content: center;
 }
 
+/* Full width, so each page is centred on the screen rather than sized to its widest text */
+#root {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 h1, h2, h3 {
   font-family: var(--font-display);
   font-weight: 700;
