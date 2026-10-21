@@ -334,7 +334,6 @@ export function createGameServer({ random = Math.random } = {}) {
     socket.on('select_card_type', ({ cardType, cardId }) =>
       relayToOpponent('opponent_select_card_type', { cardType: cardType ?? null, cardId: cardId ?? null }))
     socket.on('hover_discard', ({ hovering }) => relayToOpponent('opponent_hover_discard', { hovering }))
-    socket.on('hover_deck', ({ hovering }) => relayToOpponent('opponent_hover_deck', { hovering }))
     socket.on('hover_space', payload => relayToOpponent('opponent_hover_space', payload))
     socket.on('select_piece', payload => relayToOpponent('opponent_select_piece', payload))
 

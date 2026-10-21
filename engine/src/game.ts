@@ -3,7 +3,7 @@
 import {
   applyBuff, applyCommandEffect, applyCycle, applyDebuff, applyDirectAttack, applyDirectMove,
   applyDirectSacrifice, applyDispel, applyDisruptEffect, applyPlace, applyPurge, applyReposition,
-  applyReturn, applyShuffleIntoDeck, applySwap, capture, discardToken, playFreeCard, type ActionResult,
+  applyReturn, applySwap, capture, discardToken, playFreeCard, type ActionResult,
 } from './actions.js'
 import { createDeck, drawCard } from './deck.js'
 import {
@@ -184,16 +184,10 @@ function submitTurnAction(rec: Recorder, side: Side, action: Action, random: Ran
   if (s.pending) return { error: 'Waiting for a response.' }
   if (s.turnPhase === 'discard' && action.type !== 'end_turn') return { error: 'Discard down to 5 cards first.' }
 
-  const isFree = action.type === 'play_command' || action.type === 'play_disrupt' || action.type === 'shuffle_into_deck'
+  const isFree = action.type === 'play_command' || action.type === 'play_disrupt'
   if (!isFree && action.type !== 'end_turn' && s.actionsRemaining <= 0) return { error: 'No actions remaining.' }
 
   // Actions that resolve immediately and cannot be reacted to
-  if (action.type === 'shuffle_into_deck') {
-    const result = applyShuffleIntoDeck(s, side, action, random)
-    if ('error' in result) return result
-    rec.record(result.lastAction)
-    return rec.result()
-  }
   if (action.type === 'cycle') {
     const result = applyCycle(s, side, action, random)
     if ('error' in result) return result

@@ -604,8 +604,7 @@ button.card.selected:active:not(:disabled) {
 }
 
 .pile-area.can-cycle,
-.pile-area.sacrifice-hover,
-.deck-pile.deck-insert {
+.pile-area.sacrifice-hover {
   cursor: pointer;
 }
 
@@ -632,8 +631,6 @@ button.card.selected:active:not(:disabled) {
 .pile-card-3 { top: -5px; left: -4px; }
 .pile-card-2 { top: -2.5px; left: -2px; }
 .pile-card-1 { top: 0; left: 0; }
-.pile-card-insert { top: -8px; left: 0; z-index: 1; }
-.deck-insert .pile-card-1 { transform: translateY(-16px); }
 
 .pile-empty {
   width: 84px;

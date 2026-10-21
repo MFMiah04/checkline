@@ -28,14 +28,8 @@ function combinations(n: number, k: number): number[][] {
   return result
 }
 
-export interface LegalActionOptions {
-  // Shuffling a card back into the deck is free and unlimited, so a computer player
-  // considering it could loop forever. Off by default.
-  includeShuffleIntoDeck?: boolean
-}
-
-export function legalActions(state: GameState, side: Side, options: LegalActionOptions = {}): PlayerAction[] {
-  const candidates = candidateActions(state, side, options)
+export function legalActions(state: GameState, side: Side): PlayerAction[] {
+  const candidates = candidateActions(state, side)
 
   // Duplicate cards (e.g. two Pawns) give identical choices; keep one of each
   const hand = state.players[side].hand
@@ -53,7 +47,7 @@ export function legalActions(state: GameState, side: Side, options: LegalActionO
   return legal
 }
 
-function candidateActions(state: GameState, side: Side, options: LegalActionOptions): PlayerAction[] {
+function candidateActions(state: GameState, side: Side): PlayerAction[] {
   const { pending, board } = state
   const hand = state.players[side].hand
   const actions: PlayerAction[] = []
@@ -107,7 +101,6 @@ function candidateActions(state: GameState, side: Side, options: LegalActionOpti
 
   hand.forEach((card, cardIndex) => {
     actions.push({ type: 'cycle', cardIndex })
-    if (options.includeShuffleIntoDeck) actions.push({ type: 'shuffle_into_deck', cardIndex })
 
     switch (CARD_CATEGORY[card.type]) {
       case 'piece':

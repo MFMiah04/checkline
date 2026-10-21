@@ -47,7 +47,6 @@ function computerCues(action, hand) {
     case 'play_swap':       point(action.aRow, action.aLane); point(action.bRow, action.bLane); break
     case 'play_return':     point(action.pieceRow, action.pieceLane); break
     case 'cycle':           cues.push(['opponent_hover_discard', { hovering: true }]); break
-    case 'shuffle_into_deck': cues.push(['opponent_hover_deck', { hovering: true }]); break
   }
   return cues
 }
@@ -273,7 +272,6 @@ export class LocalGameHost {
         this.send('opponent_select_piece', null)
         this.send('opponent_hover_space', null)
         this.send('opponent_hover_discard', { hovering: false })
-        this.send('opponent_hover_deck', { hovering: false })
       })
     })
   }

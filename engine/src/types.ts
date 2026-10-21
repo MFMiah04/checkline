@@ -56,7 +56,6 @@ export type Action =
   | { type: 'direct_attack'; row: number; lane: number; targetRow: number; targetLane: number }
   | { type: 'direct_sacrifice'; row: number; lane: number }
   | { type: 'cycle'; cardIndex: number }
-  | { type: 'shuffle_into_deck'; cardIndex: number }
   | { type: 'end_turn'; discardIndices: number[] }
   | { type: 'play_command'; cardIndex: number }
   | { type: 'play_disrupt'; cardIndex: number }

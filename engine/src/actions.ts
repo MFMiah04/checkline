@@ -200,19 +200,6 @@ export function applyCycle(state: GameState, side: Side, { cardIndex }: { cardIn
   return { lastAction: lastAction('cycle', side, { cardIndex }) }
 }
 
-// ── Shuffle into deck (free) ──────────────────────────────────────────────────
-
-export function applyShuffleIntoDeck(state: GameState, side: Side, { cardIndex }: { cardIndex: number }, random: Random): ActionResult {
-  const hand = state.players[side].hand
-  if (!isCardIndex(hand, cardIndex)) return { error: 'Invalid card index.' }
-
-  const [card] = hand.splice(cardIndex, 1)
-  const pos = Math.floor(random() * (state.deck.length + 1))
-  state.deck.splice(pos, 0, card!)
-
-  return { lastAction: lastAction('shuffle_into_deck', side, {}) }
-}
-
 // ── Command and Disrupt (free, once per turn) ─────────────────────────────────
 // The card is played (and can be Intercepted) before its effect happens, so these
 // are split into a "play" step and an "effect" step.

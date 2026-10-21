@@ -43,9 +43,6 @@ export function describeAction(la, { before, after, mySide, names }) {
     case 'cycle':
       text = `${who} swapped a card for a new one from the deck`
       break
-    case 'shuffle_into_deck':
-      text = `${who} shuffled a card back into the deck`
-      break
     case 'end_turn': {
       const n = p.discardIndices?.length ?? 0
       text = `${who} ended the turn${n ? `, discarding ${n} card${n > 1 ? 's' : ''}` : ''}`

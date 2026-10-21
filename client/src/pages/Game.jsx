@@ -94,8 +94,6 @@ export default function Game({ solo = false }) {
   // null | string — card type the opponent currently has selected from their hand
   const [oppLiftedCardId, setOppLiftedCardId] = useState(null)
   const [oppDiscardHovered, setOppDiscardHovered] = useState(false)
-  const [deckHovered, setDeckHovered]         = useState(false)
-  const [oppDeckHovered, setOppDeckHovered]   = useState(false)
   const [handInsertIndex, setHandInsertIndex]   = useState(null)
   // null | number — where to insert the lifted card when hovering back over hand
 
@@ -174,7 +172,6 @@ export default function Game({ solo = false }) {
       setOppLiftedCardId(cardId ?? null)
     },
     opponent_hover_discard: ({ hovering }) => setOppDiscardHovered(hovering),
-    opponent_hover_deck:    ({ hovering }) => setOppDeckHovered(hovering),
     state_update: ({ state: s, lastAction }) => {
       setState(s)
       if (lastAction) setLastMove(describeAction(lastAction, { before: state?.board, after: s.board, mySide: side, names: s.players.map(p => p.name) }))
@@ -215,12 +212,11 @@ export default function Game({ solo = false }) {
           // ReturnSlide is playing — don't cancel it; do everything else
           setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null)
           setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
-          setDeckHovered(false); setBoardHoveredCell(null); setConfirmTarget(null); setDiscardHovered(false)
+          setBoardHoveredCell(null); setConfirmTarget(null); setDiscardHovered(false)
           setHandInsertIndex(null); insertRevealedRef.current = false
           clearTimeout(hoverTrailingRef.current)
           emit('select_card_type', { cardType: null, cardId: null })
           emit('hover_discard', { hovering: false })
-          emit('hover_deck', { hovering: false })
           // floatingPiece + returnSlide left intact — ReturnSlide.onDone clears them
         }
       } else {
@@ -285,12 +281,11 @@ export default function Game({ solo = false }) {
   function clearAll() {
     setLiftedCard(null); setPiece(null); setDiscardMode(false); setTargetMode(null); setEnslaveMode(null); setBodyguardMode(null); setForfeitConfirm(false)
     setFloatingPiece(null); setBoardHoveredCell(null); setConfirmTarget(null); setDiscardHovered(false)
-    setAttackPending(null); setReturnSlide(null); setDeckHovered(false); setHandInsertIndex(null)
+    setAttackPending(null); setReturnSlide(null); setHandInsertIndex(null)
     insertRevealedRef.current = false
     clearTimeout(hoverTrailingRef.current)
     emit('select_card_type', { cardType: null, cardId: null })
     emit('hover_discard', { hovering: false })
-    emit('hover_deck', { hovering: false })
   }
 
   function emitAction(payload, enriched = {}) {
@@ -587,7 +582,6 @@ export default function Game({ solo = false }) {
     : null
 
   const canCycleViaDiscard  = isMyTurn && inActions && liftedCard !== null && !reactionWindowMode && !enslaveMode && !bodyguardMode && state.actionsRemaining > 0
-  const canShuffleIntoDeck  = isMyTurn && inActions && liftedCard !== null && !reactionWindowMode && !enslaveMode && !bodyguardMode
   const nextPlayer          = 1 - state.currentTurn
   const myWillBeDisrupted   = state.disruptNextTurn && nextPlayer === side
   const oppWillBeDisrupted  = state.disruptNextTurn && nextPlayer !== side
@@ -635,14 +629,6 @@ export default function Game({ solo = false }) {
     emit('hover_discard', { hovering: false })
     // Do NOT clearAll() — liftedCard stays set, keeping the cycled card absent from displayHand
     // until state_update arrives (which calls clearAll via the !attackPending branch)
-  }
-
-  function handleShuffleIntoDeck() {
-    if (!liftedCard || !isMyTurn || !inActions) return
-    emit('game_action', { type: 'shuffle_into_deck', cardIndex: liftedCard.serverIdx })
-    setDeckHovered(false)
-    emit('hover_deck', { hovering: false })
-    // Don't clearAll() — state_update will handle it
   }
 
   function handleCardClick(i) {
@@ -1141,12 +1127,6 @@ if (!isMyTurn || !inActions || attackPending) return
           <DeckPile
             deckSize={state.deckSize ?? 0}
             pileRef={deckPileRef}
-            deckHovered={deckHovered && canShuffleIntoDeck}
-            liftedCard={liftedCard}
-            onDeckHover={canShuffleIntoDeck ? () => { setDeckHovered(true); emit('hover_deck', { hovering: true }) } : undefined}
-            onDeckLeave={canShuffleIntoDeck ? () => { setDeckHovered(false); emit('hover_deck', { hovering: false }) } : undefined}
-            onDeckClick={canShuffleIntoDeck ? handleShuffleIntoDeck : undefined}
-            oppDeckHovered={oppDeckHovered}
           />
           <DiscardPile
             discardPile={state.discardPile ?? []}
@@ -1206,7 +1186,7 @@ if (!isMyTurn || !inActions || attackPending) return
                 handFloatingCard={handFloatingCard}
                 oppSelectedPiece={oppAttack ? { row: oppAttack.row, lane: oppAttack.lane } : oppSelectedPiece}
                 oppHoveredCell={oppAttack ? { row: oppAttack.targetRow, lane: oppAttack.targetLane }
-                  : (oppDiscardHovered || oppDeckHovered) ? null : oppHoveredCell}
+                  : oppDiscardHovered ? null : oppHoveredCell}
                 oppSelectedCardType={oppSelectedCardType}
                 oppLiftedCardId={oppLiftedCardId}
                 confirmTarget={confirmTarget}
