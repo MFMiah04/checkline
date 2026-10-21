@@ -75,6 +75,8 @@ export default function Game({ solo = false }) {
   const [confirmTarget, setConfirmTarget]       = useState(null)
   // null | { row, lane } — brief gold pulse when action confirmed
   const [flights, setFlights]                    = useState([])
+  const [drawBadges, setDrawBadges]              = useState([])
+  // [{ key, n, left, top }] — "+2" shown over a hand that drew several cards at once
   // [{ key, id, from, to, look }] — cards flying from where they were to where they are now
   const [isShaking, setIsShaking]               = useState(false)
   const [discardHovered, setDiscardHovered]      = useState(false)
@@ -468,7 +470,8 @@ export default function Game({ solo = false }) {
           const look = f.from.zone === 'board'
             ? { kind: 'piece', piece: { type: f.from.type, owner: f.from.owner } }
             : { kind: 'card', type, faceUp: !!type && f.to.zone !== 'deck' && !(f.to.zone === 'hand' && f.to.side !== side) }
-          return { key: ++flightKeyRef.current, id: f.id, from, to, look }
+          const drawnBy = f.from.zone === 'deck' && f.to.zone === 'hand' ? f.to.side : null
+          return { key: ++flightKeyRef.current, id: f.id, from, to, look, drawnBy }
         })
         .filter(Boolean)
       skipFlightsRef.current = false
@@ -476,6 +479,17 @@ export default function Game({ solo = false }) {
       if (made.length > 0) {
         busyUntilRef.current = Date.now() + FLIGHT_MS + STEP_GAP_MS
         setFlights(prev => [...prev, ...made])
+      }
+
+      // Several cards drawn at once (a sacrificed Knight or Queen) get a count over the hand
+      for (const handSide of [0, 1]) {
+        const n = made.filter(f => f.drawnBy === handSide).length
+        const hand = zonesNow[`hand-${handSide}`]
+        if (n > 1 && hand) {
+          const badge = { key: ++flightKeyRef.current, n, left: hand.left + hand.width / 2, top: hand.top + hand.height / 2 }
+          setDrawBadges(prev => [...prev, badge])
+          setTimeout(() => setDrawBadges(prev => prev.filter(b => b.key !== badge.key)), 1600)
+        }
       }
     }
 
@@ -1243,6 +1257,9 @@ if (!isMyTurn || !inActions || attackPending) return
       </div>
 
       <FlightLayer flights={flights} mySide={side} onLanded={key => setFlights(prev => prev.filter(f => f.key !== key))} />
+      {drawBadges.map(b => (
+        <span key={b.key} className="draw-badge" style={{ left: b.left, top: b.top }} aria-hidden="true">+{b.n}</span>
+      ))}
     </div>
   )
 }
